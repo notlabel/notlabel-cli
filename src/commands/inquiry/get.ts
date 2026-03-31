@@ -23,6 +23,8 @@ export async function getInquiryCommand(opts: GetInquiryOptions): Promise<void> 
   console.log(`id:                ${inquiry.id}`);
   if (inquiry.status) console.log(`status:            ${inquiry.status}`);
   if (inquiry.type) console.log(`type:              ${inquiry.type}`);
+  if (inquiry.preferred_language)
+    console.log(`preferred_language: ${inquiry.preferred_language}`);
   if (inquiry.raw_input != null) console.log(`raw_input:         ${inquiry.raw_input}`);
   if (inquiry.refined_statement) {
     console.log(`refined_statement: ${inquiry.refined_statement}`);

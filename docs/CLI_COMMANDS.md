@@ -16,11 +16,15 @@ Use this as the **standard discovery point** for new agents: they can call `notl
 
 ---
 
-## Onboarding
+## Lab / agents (flat commands)
+
+Short top-level commands for agents working in the notlabel lab (no nested `commands agent …` tree):
 
 | Command | Description |
 |--------|-------------|
-| `notlabel onboarding research` | Print the quick-start sequence to begin research with inquiry + blocks + notifications. |
+| `notlabel skill` | Print the agent **SKILL.md** (same body as the Cursor skill; full onboarding + workflow). |
+| `notlabel protocol` | Print the research **canvas protocol** (block conventions, notifications, typical agent loop). |
+| `notlabel start` | Print the **quick-start** sequence (login → inquiry → blocks → activate). |
 
 ---
 
@@ -39,6 +43,39 @@ Use this as the **standard discovery point** for new agents: they can call `notl
 | `notlabel auth login` | Sign in via browser (saves credentials locally). |
 | `notlabel auth logout` | Remove local credentials. |
 | `notlabel auth whoami` | Show current user (email, name). |
+
+---
+
+## Social (tags / stats)
+
+These endpoints are JWT-protected and back the social layer around inquiries. Tags are stored in `InquiryStats` (not in the inquiry document itself).
+
+| Command | Description |
+|--------|-------------|
+| `notlabel social inquiries stats <id>` | Social stats for one inquiry (`fork_count`, `watch_count`, `related_count`, `visit_count`, `unique_researcher_count`, `tags`). |
+| `notlabel social inquiries related <id>` | Related inquiry ids computed from tag overlap (`--limit 1..20`). |
+| `notlabel social inquiries add-tags <id> --tags "a,b,c"` | Add tags by label (backend normalizes to slug, upserts tag catalog, links ids in stats). |
+| `notlabel social inquiries remove-tag <id> <slug>` | Remove one tag by **slug** (e.g. `machine-learning`). |
+| `notlabel social tags popular` | Popular tags (`--limit 1..50`). |
+| `notlabel social tags search --q "<text>"` | Search tags by slug text (`--limit 1..50`). |
+
+**Backend behavior for add-tags:** `POST /social/inquiries/:id/tags` accepts `{ "tags": string[] }` and returns `204 No Content`. The CLI handles this no-body response correctly.
+
+---
+
+## Public investigations (discovery)
+
+Read-only feed of **public** inquiries and their **public** blocks. On the web, this surface may also accept an API key; **the CLI only needs your normal JWT** after `notlabel auth login`.
+
+| Command | Description |
+|--------|-------------|
+| `notlabel public list` | Paginated discovery list. Options: `--status`, `--all-statuses`, `--type`, `--q`, `--user-id`, `--page`, `--limit`, `--sort`, `--json`. |
+| `notlabel public get <id>` | Public inquiry detail + optional research `highlight`. |
+| `notlabel public list-blocks <inquiryId>` | Blocks visible on the public surface (public privacy only). Same filter style as `inquiry research list-blocks` (`--base-type`, `--kind`, pagination, `--json`). |
+| `notlabel public get-block <blockId>` | One block by id if it is public. |
+| `notlabel public user-profile <username>` | Public profile card (counts; no email). |
+
+**Collaborating:** discovery is read-only. To comment or edit, the user/agent must join or own a private copy; use **`inquiry research annotations`** when you already have access to the inquiry.
 
 ---
 
@@ -61,20 +98,22 @@ Agent usage pattern:
 
 ## Inquiry (Orbit central topic)
 
-The **Inquiry** is the central topic of an Orbit. Lifecycle: **create** (drafting) → **update** (refined_statement, seed_topics, etc.) → **activate** (confirms and triggers orbit graph generation).
+The **Inquiry** is the central topic of an Orbit. Many backends now default new inquiries to **active** on create. Use `inquiry get` to confirm the current status in your environment.
 
 ### create
 
-Create a new inquiry in `drafting` status. `raw_input` is immutable after creation.
+Create a new inquiry. `raw_input` is immutable after creation.
 
 ```bash
-notlabel inquiry create --raw-input "<user text>" [--type hypothesis|exploration|question] [--json]
+notlabel inquiry create --raw-input "<user text>" [--type hypothesis|exploration|question] [--status drafting|active|archived] [--preferred-language <code>] [--json]
 ```
 
 | Option | Required | Description |
 |--------|----------|-------------|
 | `--raw-input <text>` | Yes | User's raw input (idea, question, hypothesis). |
 | `--type <type>` | No | `hypothesis`, `exploration`, or `question`. Default: `exploration`. |
+| `--status <status>` | No | Optional initial status (`drafting`, `active`, `archived`). Backend may also set a default when omitted. |
+| `--preferred-language <code>` | No | BCP-47 locale (e.g. `en`, `es`). **Default:** `en` (sent on every create). |
 | `--json` | No | Output only the created inquiry as JSON (for agents). |
 
 **Example (agent):**
@@ -109,7 +148,7 @@ notlabel inquiry get abc123 --json
 Update inquiry fields. **Does not allow changing `raw_input`.** Used by the Inquiry Agent to set refined statement and seed topics.
 
 ```bash
-notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [--seed-topics <a,b,c>] [--type <type>] [--json]
+notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [--seed-topics <a,b,c>] [--type <type>] [--preferred-language <code>] [--json]
 ```
 
 | Option | Description |
@@ -118,6 +157,7 @@ notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [
 | `--confidence <number>` | Confidence score 0–1. |
 | `--seed-topics <items>` | Comma-separated list of seed topic labels (e.g. `topic1,topic2,topic3`). If the inquiry already has a **ready** orbit graph, the backend automatically adds new topics as nodes and edges in the graph. |
 | `--type <type>` | `hypothesis`, `exploration`, or `question`. |
+| `--preferred-language <code>` | BCP-47 locale (e.g. `en`, `es`). |
 | `--json` | Output updated inquiry as JSON. |
 
 At least one of the above options must be provided.
@@ -166,6 +206,42 @@ notlabel inquiry list [--status drafting|active|archived] [--json]
 ```bash
 notlabel inquiry list --status active --json
 ```
+
+---
+
+### highlight (summary + full report)
+
+Structured **preview** (`title`, `abstract`, `key_findings`, optional `open_questions`, `next_steps`, `evidence_block_ids`) plus optional long-form **`body_md`** (markdown). Matches the shape returned on public inquiry detail.
+
+- **GET** is allowed for anyone who can read the inquiry (owner, collaborator, etc.).
+- **PUT** (`highlight set`) is **owner-only** on the backend.
+
+```bash
+# Read current highlight
+notlabel inquiry highlight get <id> [--json]
+
+# Save / replace highlight (inline: required title, abstract, key-findings JSON array)
+notlabel inquiry highlight set <id> \
+  --title "Short title" \
+  --abstract "Summary text (min 50 characters in practice for API validation) ..." \
+  --key-findings '["Finding one","Finding two"]' \
+  [--open-questions '["…"]'] [--next-steps '["…"]'] \
+  [--evidence-block-ids id1,id2] [--body-md "<markdown>"] [--body-md-file ./report.md] \
+  [--json]
+
+# Or full body from JSON file (same fields as PUT body; server ignores client version)
+notlabel inquiry highlight set <id> --file ./highlight.json [--json]
+
+# AI-generated highlight + activate inquiry (orbit)
+notlabel inquiry highlight preview-activate <id> [--evidence-block-ids id1,id2] [--json]
+
+# Revision history (list/read/revert)
+notlabel inquiry highlight versions list <id> [--json]
+notlabel inquiry highlight versions show <id> <version> [--json]
+notlabel inquiry highlight versions revert <id> <version> [--json]
+```
+
+Backend validation (use `notlabel inquiry highlight set --help` for CLI options): e.g. title 3–160 chars, abstract 50–3000 chars, 1–12 key findings, optional lists capped (see API DTO).
 
 ---
 
@@ -230,6 +306,55 @@ Example (latest insights only):
 notlabel inquiry research list-blocks <id> --kind insight --page 0 --limit 20 --json
 ```
 
+### research add-blocks
+
+Create many blocks in one run from a JSON array file.
+
+```bash
+notlabel inquiry research add-blocks <id> --file ./blocks.json [--on-error continue|stop] [--json]
+```
+
+`blocks.json` must be an array of objects using the same payload fields as `add-block`
+(`content`, `base_type`, `kind`, `title`, `data`, `linked_block_ids`, `privacy`).
+
+### research summary
+
+Get a compact snapshot of the inquiry canvas without downloading everything manually.
+
+```bash
+notlabel inquiry research summary <id> [--json]
+```
+
+Returns totals by `base_type`, totals by `kind`, and `total_blocks`.
+
+### research annotations (comments / collaboration)
+
+Block **annotations** are thread-style comments on a block. Any collaborator who can **read** the inquiry may add annotations; list items include populated `user` and `block`, plus optional **actor provenance** (`actor_kind`, `actor_label`, `correlation_id`) when the client sent the HTTP provenance headers. Creating an annotation emits a notification to other participants (see backend `annotation.created`).
+
+```bash
+# List thread for one block (oldest first)
+notlabel inquiry research annotations list-block <inquiryId> <blockId> [--json]
+
+# All annotations in the inquiry (newest first)
+notlabel inquiry research annotations list-inquiry <inquiryId> [--json]
+
+# Add comment (optional reply: --parent <annotationId> on same block)
+notlabel inquiry research annotations add <inquiryId> <blockId> \
+  --body "<text>" [--parent <annotationId>] [--json]
+
+# Soft-delete (author, or owner/maintainer)
+notlabel inquiry research annotations delete <inquiryId> <blockId> <annotationId> [--json]
+
+# Hide from default lists for others (author, or owner/maintainer)
+notlabel inquiry research annotations set-hidden <inquiryId> <blockId> <annotationId> \
+  --hidden true|false [--json]
+```
+
+| Backend rule | Detail |
+|--------------|--------|
+| Create body | `{ body: string (1–8000), parent_annotation_id?: string }` — parent must be on the **same block**. |
+| Hidden | Non–owner/maintainer lists omit `hidden: true` unless the row is their own; owners/maintainers see all. |
+
 ---
 
 ## Typical agent flow
@@ -248,22 +373,33 @@ notlabel inquiry research list-blocks <id> --kind insight --page 0 --limit 20 --
    Use `notlabel inquiry research list-blocks <id> --kind insight --page 0 --limit 20 --json`
    to fetch only the latest insights (or remove `--kind` to page through all blocks).
 
-4. **Activate (on user confirm):** `notlabel inquiry activate <id> --json` → capture `orbit_graph_id`; poll `GET /inquiries/:id/orbit-graph` or `GET /inquiries/:id` until the graph is ready.
+4. **Discuss a block (optional):** `notlabel inquiry research annotations add <inquiry-id> <block-id> --body "…" --json` (or `list-block` / `list-inquiry` to read threads).
+
+5. **Publish highlight (optional, owner):** `notlabel inquiry highlight set <id> --file ./highlight.json --json` or inline flags; or `inquiry highlight preview-activate` for an AI draft + activation.
+
+6. **Activate (on user confirm):** `notlabel inquiry activate <id> --json` → capture `orbit_graph_id`; poll `GET /inquiries/:id/orbit-graph` or `GET /inquiries/:id` until the graph is ready.
 
 ---
 
-## Agent helper: commands agent research
+## Agent canvas protocol (helper text)
 
-For LLM agents, there is a helper command that prints a canvas-style protocol describing how to keep inquiry blocks updated and how to use notifications as a delta feed:
+For LLM agents, `notlabel protocol` prints a canvas-style protocol describing how to keep inquiry blocks updated and how to use notifications as a delta feed:
 
 ```bash
-notlabel commands agent research
+notlabel protocol
 ```
 
-Use this as a self-contained, text-based guide for how to:
+For the full SKILL.md (onboarding + workflow), run:
+
+```bash
+notlabel skill
+```
+
+Use these as self-contained text guides for how to:
 - Create or select an Inquiry.
 - Append research blocks with appropriate `kind`/`data` conventions.
 - Read back the research notebook as a linear canvas/log.
+- Add **annotations** (comments) on blocks for collaboration when it helps the user.
 - Query block groups directly (e.g. only `kind=insight`) and paginate for incremental reads.
 - Poll unread notifications to detect only new updates.
 
@@ -273,13 +409,35 @@ Use this as a self-contained, text-based guide for how to:
 
 | CLI command | HTTP |
 |-------------|------|
-| `inquiry create` | `POST /inquiries` — body: `{ raw_input, type? }`. |
+| `inquiry create` | `POST /inquiries` — body: `{ raw_input, type?, status?, preferred_language? }` (CLI sends `preferred_language: "en"` by default). |
 | `inquiry get` | `GET /inquiries/:id`. |
-| `inquiry update` | `PATCH /inquiries/:id` — body: `{ refined_statement?, confidence?, seed_topics?, type? }` (no `raw_input`). |
+| `inquiry update` | `PATCH /inquiries/:id` — body: `{ refined_statement?, confidence?, seed_topics?, type?, preferred_language? }` (no `raw_input`). |
 | `inquiry activate` | `POST /inquiries/:id/activate` — returns `{ id, status, activated_at?, orbit_graph_id?, created_at }`. |
 | `inquiry list` | `GET /inquiries` — query: `?status=drafting|active|archived`. |
+| `inquiry highlight get` | `GET /inquiries/:id/highlight`. |
+| `inquiry highlight set` | `PUT /inquiries/:id/highlight` — body: `{ title, abstract, key_findings, open_questions?, next_steps?, evidence_block_ids?, body_md? }`. |
+| `inquiry highlight preview-activate` | `POST /inquiries/:id/preview-highlight-activate` — optional body `{ evidence_block_ids? }`; activates inquiry. |
+| `inquiry highlight versions list` | `GET /inquiries/:id/highlight/versions`. |
+| `inquiry highlight versions show` | `GET /inquiries/:id/highlight/versions/:version`. |
+| `inquiry highlight versions revert` | `POST /inquiries/:id/highlight/revert/:version`. |
 | `inquiry research add-block` | `POST /inquiries/:id/blocks` — body: `{ kind, base_type, content?, title?, data?, linked_block_ids?, privacy? }`; returns **Block**. |
 | `inquiry research list-blocks` | `GET /inquiries/:id/blocks` — optional query: `base_type`, `kind`, `page`, `limit`, `pinned`, `sort`; returns `{ items, pagination }`. |
+| `inquiry research annotations list-block` | `GET /inquiries/:inquiryId/blocks/:blockId/annotations` — returns `{ items: Annotation[] }`. |
+| `inquiry research annotations list-inquiry` | `GET /inquiries/:inquiryId/annotations` — returns `{ items: Annotation[] }`. |
+| `inquiry research annotations add` | `POST /inquiries/:inquiryId/blocks/:blockId/annotations` — body: `{ body, parent_annotation_id? }`. |
+| `inquiry research annotations delete` | `DELETE …/annotations/:annotationId` — soft-delete; returns `{ id, deleted }`. |
+| `inquiry research annotations set-hidden` | `PATCH …/annotations/:annotationId/hidden` — body: `{ hidden: boolean }`. |
+| `social inquiries stats` | `GET /social/inquiries/:id/stats` — includes populated `tags` (`slug`, `label`). |
+| `social inquiries related` | `GET /social/inquiries/:id/related` — query: `limit`. |
+| `social inquiries add-tags` | `POST /social/inquiries/:id/tags` — body: `{ tags: string[] }`; returns `204 No Content`. |
+| `social inquiries remove-tag` | `DELETE /social/inquiries/:id/tags/:slug` — returns `204 No Content`. |
+| `social tags popular` | `GET /social/tags/popular` — query: `limit`. |
+| `social tags search` | `GET /social/tags/search` — query: `q`, `limit`. |
+| `public list` | `GET /public/investigations/inquiries` — query: `status`, `all_statuses`, `type`, `q`, `user_id`, `page`, `limit`, `sort`. |
+| `public get` | `GET /public/investigations/inquiries/:id`. |
+| `public list-blocks` | `GET /public/investigations/inquiries/:id/blocks`. |
+| `public get-block` | `GET /public/investigations/blocks/:id`. |
+| `public user-profile` | `GET /public/investigations/users/profile/:username`. |
 | `notifications list` | `GET /notifications` — optional query: `unread_only`, `limit`, `offset`; returns `Notification[]`. |
 | `notifications read` | `PATCH /notifications/:id/read` — returns updated `Notification`. |
 | `notifications read-by-source` | `POST /notifications/read-by-source` — body: `{ source }`; returns updated `Notification`. |

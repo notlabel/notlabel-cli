@@ -6,7 +6,7 @@ export function onboardingResearchCommand(): void {
     "1) Login",
     "   notlabel auth login",
     "",
-    "2) Create your inquiry (draft)",
+    "2) Create your inquiry (backend default: active)",
     "   notlabel inquiry create --raw-input \"<your research question>\" --type exploration --json",
     "",
     "3) Refine it (optional but recommended)",
@@ -23,10 +23,11 @@ export function onboardingResearchCommand(): void {
     "   notlabel inquiry activate <inquiry-id> --json",
     "",
     "Need details?",
+    "- notlabel skill      — full agent SKILL.md",
+    "- notlabel protocol   — canvas protocol",
     "- notlabel help",
     "- notlabel inquiry --help",
     "- notlabel inquiry research --help",
-    "- notlabel commands agent research",
   ];
 
   console.log(lines.join("\n"));

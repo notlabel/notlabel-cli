@@ -37,7 +37,7 @@ export async function whoamiCommand(opts?: { json?: boolean }): Promise<void> {
   );
   console.log("\x1b[90mTip: run `notlabel help` to browse commands.\x1b[0m");
   console.log(
-    "\x1b[90mStarter: run `notlabel onboarding research` for the quick research flow.\x1b[0m",
+    "\x1b[90mLab: run `notlabel skill` (onboarding) or `notlabel start` (quick sequence).\x1b[0m",
   );
   console.log();
 }
