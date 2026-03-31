@@ -14,10 +14,16 @@ export type BlockBaseType =
   | "insight"
   | "custom";
 
-/** Serialized block from GET/POST/PATCH /blocks… or inquiry block lists. */
+/** Serialized block from GET/POST/PATCH /blocks… or inquiry block lists (matches BlocksController.serialize). */
 export interface Block {
   id: string;
-  inquiry_id: string;
+  /** Mirrors backend actor provenance when the client sent HTTP provenance headers. */
+  actor_kind?: string | null;
+  actor_label?: string | null;
+  correlation_id?: string | null;
+  inquiry_id: string | null;
+  /** Present when the block is scoped to a Topic (pre-inquiry / topic canvas). */
+  topic_id?: string | null;
   user_id: string;
   kind: string;
   base_type: BlockBaseType;
@@ -28,6 +34,12 @@ export interface Block {
   privacy: string;
   is_pinned: boolean;
   pinned_at: string | null;
+  /** Set for collaborator-submitted contributions pending or past review. */
+  contribution_kind?: string | null;
+  contribution_review_status?: string | null;
+  contribution_reviewed_at?: string | null;
+  contribution_reviewed_by_user_id?: string | null;
+  contribution_rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,7 +56,35 @@ export interface ListBlocksResponse {
   pagination: BlocksPagination;
 }
 
-/** Inquiry fields vary by endpoint; merge of list/get/create/update/activate payloads. */
+/** Collaborator row on an inquiry (owner is `user_id`, not repeated here). */
+export type InquiryCollaboratorRole = "viewer" | "editor" | "maintainer";
+
+export type InquiryMyRole = "owner" | InquiryCollaboratorRole;
+
+export interface InquiryCollaborator {
+  user_id: string;
+  role: InquiryCollaboratorRole;
+  user?: {
+    username?: string | null;
+    email?: string;
+    avatar?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+}
+
+/** Topic summary embedded on inquiry detail (`topics` / `root_topic` from inquiry serializer). */
+export interface InquiryTopicSummary {
+  id: string;
+  label: string;
+  slug: string;
+  description: string | null;
+}
+
+/**
+ * Inquiry fields vary by endpoint. **GET /inquiries/:id** (authenticated) matches
+ * `serializeInquiryDetail` in the backend: seed topic ids, topic summaries, collaborators, `my_role`.
+ */
 export interface Inquiry {
   id: string;
   user_id?: string;
@@ -52,12 +92,24 @@ export interface Inquiry {
   refined_statement?: string;
   type?: InquiryType;
   status?: InquiryStatus;
-  /** BCP-47 / locale code (e.g. en, es). Backend default is typically `en`. */
+  /**
+   * Backend schema default/enumeration includes `en` and `es` (see InquiryPreferredLanguage).
+   * Serialized detail always returns a normalized value.
+   */
   preferred_language?: string;
   confidence?: number;
-  seed_topics?: string[];
-  collaborators?: string[];
   privacy?: InquiryPrivacy;
+  /** Legacy/string seed labels (bench copy). */
+  seed_topics?: string[];
+  /** ObjectIds of seed Topic documents (strings in JSON). */
+  seed_topic_ids?: string[];
+  root_topic_id?: string | null;
+  root_topic?: InquiryTopicSummary | null;
+  /** De-duplicated topic cards (seed + root). */
+  topics?: InquiryTopicSummary[];
+  collaborators?: InquiryCollaborator[];
+  /** Present on private inquiry detail for the current user. */
+  my_role?: InquiryMyRole;
   orbit_graph_id?: string | null;
   activated_at?: string | null;
   created_at?: string;
@@ -91,6 +143,18 @@ export interface CreateBlockBody {
   privacy?: InquiryPrivacy;
 }
 
+/** PATCH /blocks/:id — send only fields to change. */
+export interface UpdateBlockBody {
+  kind?: string;
+  base_type?: BlockBaseType;
+  title?: string;
+  content?: string;
+  data?: Record<string, unknown>;
+  linked_block_ids?: string[];
+  privacy?: InquiryPrivacy;
+  is_pinned?: boolean;
+}
+
 /** POST /inquiries/:id/activate — flat payload (no nested inquiry). */
 export interface ActivateInquiryResponse {
   id: string;
@@ -101,6 +165,7 @@ export interface ActivateInquiryResponse {
 }
 
 /** Block annotation (comment) — list/create payloads from block-annotations API. */
+/** Matches BlockAnnotationsService.AnnotationListItem.user (populated from User). */
 export interface BlockAnnotationUser {
   id: string;
   username: string | null;
@@ -113,6 +178,10 @@ export interface BlockAnnotationBlockRef {
   kind: string;
 }
 
+/**
+ * Annotation list/create/hidden API shape. The schema also has `deleted_at` (soft-delete);
+ * deleted rows are **omitted** from list responses.
+ */
 export interface BlockAnnotation {
   id: string;
   actor_kind: string | null;

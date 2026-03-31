@@ -141,6 +141,8 @@ notlabel inquiry get <id> [--json]
 notlabel inquiry get abc123 --json
 ```
 
+**Authenticated detail shape (backend `serializeInquiryDetail`):** includes `seed_topic_ids`, `topics` (topic summaries with `id`, `label`, `slug`, `description`), `root_topic` / `root_topic_id`, `collaborators` (`user_id`, `role`, optional nested `user` profile fields), and `my_role` (`owner` \| `viewer` \| `editor` \| `maintainer`). Use `--json` so agents parse these reliably.
+
 ---
 
 ### update
@@ -272,16 +274,62 @@ notlabel inquiry research add-block <id> \
 | `--base-type` | No | Taxonomy (default: `note`). |
 | `--kind <label>` | No | Free-form label (default: `note`). |
 | `--title <text>` | No | Short title. |
-| `--data <json>` | No | Optional structured metadata. |
-| `--linked-blocks` | No | Comma-separated ids of other blocks in the same inquiry. |
+| `--data <json>` | No | Structured metadata as JSON. **Source / `kind` reference:** `{"url":"https://...","title":"...","authors":["A"],"year":2024}`. **Goal note:** `{"priority":"high"|"medium"|"low"}`. Run `notlabel inquiry research add-block --help` for more examples. |
+| `--linked-blocks` | No | Comma-separated ids of other blocks in the **same inquiry** (knowledge-graph links). Example: `id1,id2`. |
 | `--privacy` | No | `private` or `public`. |
 | `--json` | No | Output the created **block** as JSON. |
 
 **Notes:**
-- List and inspect blocks with `inquiry research list-blocks` or `GET /inquiries/:id/blocks`.
+- List blocks with `inquiry research list-blocks` (JSON field is **`items`**, not `blocks`). Fetch one block: `inquiry research get-block <blockId>`.
+- For `base_type` **source** and `kind` **reference**, the CLI prints a **warning** if `--data` is missing a `url` (optional hygiene; the server may still accept the block).
 - The backend stores blocks in a dedicated collection; they are not embedded on `GET /inquiries/:id`.
 
 **Orbit graph (backend):** When you add or update `seed_topics` on an inquiry that already has a **ready** orbit graph, the backend automatically adds the new topics as nodes (orbit 1) and creates edges between them and all existing nodes. The frontend graph updates accordingly. The CLI does not expose graph mutation commands; the front (or direct API) can use the orbit-graph endpoints below for manual edges/nodes.
+
+### research add-block-on-topic
+
+Create a block under a **Topic** (`POST /topics/:topicId/blocks`). Useful for pre-inquiry / topic-scoped canvases; linked blocks must belong to the **same topic**.
+
+```bash
+notlabel inquiry research add-block-on-topic <topicId> \
+  --content "<text>" \
+  [--base-type note|experiment|source|code|insight|custom] \
+  [--kind <label>] \
+  [--title "<text>"] \
+  [--data '<json>'] \
+  [--linked-blocks id1,id2] \
+  [--privacy private|public] \
+  [--json]
+```
+
+### research get-block
+
+```bash
+notlabel inquiry research get-block <blockId> [--json]
+```
+
+Resolves to `GET /blocks/:blockId`.
+
+### research update-block
+
+Partial update (`PATCH /blocks/:blockId`). When setting non-empty `--linked-blocks`, pass `--inquiry-id` or `--topic-id` so the CLI can validate ids exist in that scope.
+
+```bash
+notlabel inquiry research update-block <blockId> \
+  [--kind <label>] [--base-type ...] [--title "<text>"] [--content "<text>"] \
+  [--data '<json>'] \
+  [--linked-blocks id1,id2 --inquiry-id <inquiryId>] \
+  [--privacy private|public] [--pinned true|false] \
+  [--json]
+```
+
+### research delete-block
+
+Soft-delete on the server (`DELETE /blocks/:blockId`).
+
+```bash
+notlabel inquiry research delete-block <blockId> [--json]
+```
 
 ### research list-blocks
 
@@ -421,6 +469,10 @@ Use these as self-contained text guides for how to:
 | `inquiry highlight versions show` | `GET /inquiries/:id/highlight/versions/:version`. |
 | `inquiry highlight versions revert` | `POST /inquiries/:id/highlight/revert/:version`. |
 | `inquiry research add-block` | `POST /inquiries/:id/blocks` — body: `{ kind, base_type, content?, title?, data?, linked_block_ids?, privacy? }`; returns **Block**. |
+| `inquiry research add-block-on-topic` | `POST /topics/:topicId/blocks` — same body shape; block is topic-scoped until promoted. |
+| `inquiry research get-block` | `GET /blocks/:blockId`. |
+| `inquiry research update-block` | `PATCH /blocks/:blockId` — partial body. |
+| `inquiry research delete-block` | `DELETE /blocks/:blockId` — soft delete; returns `{ id, deleted }`. |
 | `inquiry research list-blocks` | `GET /inquiries/:id/blocks` — optional query: `base_type`, `kind`, `page`, `limit`, `pinned`, `sort`; returns `{ items, pagination }`. |
 | `inquiry research annotations list-block` | `GET /inquiries/:inquiryId/blocks/:blockId/annotations` — returns `{ items: Annotation[] }`. |
 | `inquiry research annotations list-inquiry` | `GET /inquiries/:inquiryId/annotations` — returns `{ items: Annotation[] }`. |
@@ -441,6 +493,45 @@ Use these as self-contained text guides for how to:
 | `notifications list` | `GET /notifications` — optional query: `unread_only`, `limit`, `offset`; returns `Notification[]`. |
 | `notifications read` | `PATCH /notifications/:id/read` — returns updated `Notification`. |
 | `notifications read-by-source` | `POST /notifications/read-by-source` — body: `{ source }`; returns updated `Notification`. |
+
+---
+
+## Backend resource shapes (Inquiry, Block, Annotation)
+
+These notes mirror **`notlabel-services`** schemas and serializers so agents parse `--json` output correctly. Source of truth remains the backend repo.
+
+### Inquiry (`GET /inquiries/:id` with JWT)
+
+Private **detail** uses `serializeInquiryDetail`. Beyond core fields (`raw_input`, `refined_statement`, `type`, `status`, `confidence`, `privacy`, `preferred_language`, `orbit_graph_id`, `activated_at`, timestamps):
+
+| Field | Meaning |
+|--------|---------|
+| `seed_topics` | String labels (legacy/bench copy). |
+| `seed_topic_ids` | Topic document ids (strings in JSON). |
+| `root_topic_id`, `root_topic` | Root topic id and optional `{ id, label, slug, description }`. |
+| `topics` | De-duplicated array of topic summaries (`id`, `label`, `slug`, `description`). |
+| `collaborators` | `{ user_id, role: viewer\|editor\|maintainer, user?: { username, email, avatar, first_name, last_name } }[]`. Owner is inquiry `user_id`, not repeated here. |
+| `my_role` | `owner` \| `viewer` \| `editor` \| `maintainer` for the current user. |
+
+`preferred_language` is normalized in the response; the Mongoose enum includes at least `en` and `es`. Public discovery endpoints omit collaborator-rich shapes.
+
+### Block (`GET`/`POST`/`PATCH` `/blocks/…`, list items)
+
+| Area | Meaning |
+|------|---------|
+| Scope | `inquiry_id` (normal inquiry canvas) and/or `topic_id` (topic-scoped / pre-promotion). |
+| Actor | Optional `actor_kind` (`user_manual` \| `agent`), `actor_label`, `correlation_id` when the client sent HTTP provenance headers on write. |
+| Contributions | Optional `contribution_kind`, `contribution_review_status` (`pending` \| `approved` \| `rejected`), review timestamps, `contribution_reviewed_by_user_id`, `contribution_rejection_reason`. |
+
+### Block annotation (list / create / set-hidden)
+
+| Area | Meaning |
+|------|---------|
+| Payload | `items[]` with `actor_*`, `block_id`, `inquiry_id`, `user_id`, `body`, `parent_annotation_id`, `hidden`, populated `user` (`id`, `username`, `display_name`), `block` (`id`, `title`, `kind`), timestamps. |
+| Deletes | Schema has `deleted_at`; **list routes omit** soft-deleted rows. |
+| Hidden | Non–owner/maintainer lists typically omit others’ `hidden: true` unless the row is the viewer’s own. |
+
+---
 
 ### Orbit graph endpoints (backend; not exposed by CLI)
 

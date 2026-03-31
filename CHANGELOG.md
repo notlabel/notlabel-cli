@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-03-31
+
+### Added
+
+- Block lifecycle commands:
+  - `notlabel inquiry research get-block <blockId>`
+  - `notlabel inquiry research update-block <blockId>`
+  - `notlabel inquiry research delete-block <blockId>`
+- Topic-scoped block creation: `notlabel inquiry research add-block-on-topic <topicId>` (`POST /topics/:topicId/blocks`).
+- Client-side validation helpers for linked blocks; optional warning when `source`/`reference` omits `url` in `--data`.
+- Richer `add-block` / `add-block-on-topic` help text and `--data` / `--linked-blocks` examples.
+- Shared lab hints after login: `src/commands/auth/lab-hints.ts`.
+
+### Changed
+
+- `notlabel auth whoami` (human mode) now prints the same **Next steps** and **API provenance** blocks as after `login`, plus wallet status.
+- `Inquiry`, `Block`, and annotation TypeScript types aligned with backend schemas and serializers (e.g. `seed_topic_ids`, `topics`, `collaborators`, `my_role`, block actor/contribution fields).
+- `notlabel inquiry get` human output shows topic/collaborator summary fields when present.
+- `docs/CLI_COMMANDS.md`: block command docs, **Backend resource shapes** section; `README` / `COMANDOS` pointers; skill and protocol text updated (`items` vs `blocks`, CRUD workflow).
+
 ## [0.2.0] - 2026-03-30
 
 ### Added

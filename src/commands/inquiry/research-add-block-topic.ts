@@ -1,7 +1,9 @@
 import { http } from "../../core/http.js";
 import { warnBlockDataConventions } from "./block-data-hints.js";
 import { handleApiError, printJson } from "./common.js";
-import { validateLinkedBlockIdsInInquiry } from "./research-block-helpers.js";
+import {
+  validateLinkedBlockIdsInTopic,
+} from "./research-block-helpers.js";
 import type {
   Block,
   BlockBaseType,
@@ -9,8 +11,8 @@ import type {
   InquiryPrivacy,
 } from "./types.js";
 
-export interface AddResearchBlockOptions {
-  id: string;
+export interface AddResearchBlockOnTopicOptions {
+  topicId: string;
   content: string;
   kind?: string;
   baseType?: BlockBaseType;
@@ -21,8 +23,8 @@ export interface AddResearchBlockOptions {
   json?: boolean;
 }
 
-export async function addResearchBlockCommand(
-  opts: AddResearchBlockOptions,
+export async function addResearchBlockOnTopicCommand(
+  opts: AddResearchBlockOnTopicOptions,
 ): Promise<void> {
   const content = opts.content?.trim();
   if (!content) {
@@ -56,8 +58,8 @@ export async function addResearchBlockCommand(
   if (opts.linkedBlockIds?.length) {
     let missingIds: string[] = [];
     try {
-      missingIds = await validateLinkedBlockIdsInInquiry(
-        opts.id,
+      missingIds = await validateLinkedBlockIdsInTopic(
+        opts.topicId,
         opts.linkedBlockIds,
       );
     } catch (err) {
@@ -65,7 +67,7 @@ export async function addResearchBlockCommand(
     }
     if (missingIds.length > 0) {
       console.error(
-        `\x1b[31mError: --linked-blocks contains unknown block ids for inquiry ${opts.id}: ${missingIds.join(", ")}\x1b[0m`,
+        `\x1b[31mError: --linked-blocks contains unknown block ids for topic ${opts.topicId}: ${missingIds.join(", ")}\x1b[0m`,
       );
       process.exit(1);
     }
@@ -73,7 +75,10 @@ export async function addResearchBlockCommand(
 
   let block: Block;
   try {
-    block = await http.post<Block>(`/inquiries/${opts.id}/blocks`, body);
+    block = await http.post<Block>(
+      `/topics/${opts.topicId}/blocks`,
+      body,
+    );
   } catch (err) {
     handleApiError(err);
   }
@@ -83,15 +88,11 @@ export async function addResearchBlockCommand(
     return;
   }
 
-  console.log("\x1b[32mBlock created.\x1b[0m");
+  console.log("\x1b[32mBlock created on topic.\x1b[0m");
   console.log(`block_id:     ${block.id}`);
+  console.log(`topic_id:     ${opts.topicId}`);
   if (block.inquiry_id) console.log(`inquiry_id:   ${block.inquiry_id}`);
   console.log(`kind:         ${block.kind}`);
   console.log(`base_type:    ${block.base_type}`);
-  if (block.title) console.log(`title:        ${block.title}`);
-  const preview = block.content ?? "";
-  console.log(
-    `content:      ${preview.slice(0, 120)}${preview.length > 120 ? "…" : ""}`,
-  );
   console.log();
 }

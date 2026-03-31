@@ -1,6 +1,6 @@
 # notlabel — commands
 
-Short list of entrypoints. For full flags and behavior see `docs/CLI_COMMANDS.md`.
+Short list of entrypoints. For full flags, behavior, and **API/JSON shapes** (inquiry, block, annotation), see `docs/CLI_COMMANDS.md`.
 
 ```
 notlabel help
@@ -30,6 +30,10 @@ notlabel inquiry highlight versions list <id>
 notlabel inquiry highlight versions show <id> <version>
 notlabel inquiry highlight versions revert <id> <version>
 notlabel inquiry research add-block <id>
+notlabel inquiry research add-block-on-topic <topicId>
+notlabel inquiry research get-block <blockId>
+notlabel inquiry research update-block <blockId>
+notlabel inquiry research delete-block <blockId>
 notlabel inquiry research add-blocks <id>
 notlabel inquiry research list-blocks <id>
 notlabel inquiry research summary <id>

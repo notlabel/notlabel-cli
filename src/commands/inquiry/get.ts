@@ -34,6 +34,26 @@ export async function getInquiryCommand(opts: GetInquiryOptions): Promise<void> 
   if (inquiry.seed_topics?.length) {
     console.log(`seed_topics:       ${inquiry.seed_topics.join(", ")}`);
   }
+  if (inquiry.seed_topic_ids?.length) {
+    console.log(`seed_topic_ids:    ${inquiry.seed_topic_ids.join(", ")}`);
+  }
+  if (inquiry.root_topic_id) {
+    console.log(`root_topic_id:     ${inquiry.root_topic_id}`);
+  }
+  if (inquiry.topics?.length) {
+    const line = inquiry.topics
+      .map((t) => (t.slug ? `${t.label} [${t.slug}]` : t.label))
+      .join("; ");
+    console.log(`topics:            ${line}`);
+  }
+  if (inquiry.my_role) {
+    console.log(`my_role:           ${inquiry.my_role}`);
+  }
+  if (inquiry.collaborators?.length) {
+    console.log(
+      `collaborators:     ${inquiry.collaborators.length} (use --json for roles)`,
+    );
+  }
   if (inquiry.orbit_graph_id) {
     console.log(`orbit_graph_id:    ${inquiry.orbit_graph_id}`);
   }

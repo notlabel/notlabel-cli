@@ -1,4 +1,5 @@
 import { http, AuthExpiredError, HttpError } from "../../core/http.js";
+import { printLabAgentHints } from "./lab-hints.js";
 
 export interface MeResponse {
   email: string;
@@ -28,16 +29,13 @@ export async function whoamiCommand(opts?: { json?: boolean }): Promise<void> {
     return;
   }
 
-  console.log(`\nEmail:  \x1b[36m${me.email}\x1b[0m`);
+  console.log(`\nLogged in as: \x1b[36m${me.email}\x1b[0m`);
   if (me.name) {
-    console.log(`Name:   ${me.name}`);
+    console.log(`Name: ${me.name}`);
   }
   console.log(
     `Wallet: ${me.wallet_connected ? "\x1b[32mconnected\x1b[0m" : "\x1b[33mnot connected\x1b[0m"}`
   );
-  console.log("\x1b[90mTip: run `notlabel help` to browse commands.\x1b[0m");
-  console.log(
-    "\x1b[90mLab: run `notlabel skill` (onboarding) or `notlabel start` (quick sequence).\x1b[0m",
-  );
+  printLabAgentHints();
   console.log();
 }

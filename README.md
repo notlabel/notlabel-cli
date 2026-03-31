@@ -73,28 +73,18 @@ Run `notlabel help` and `notlabel <command> --help` for details.
 ## Documentation
 
 - Full command reference: `docs/CLI_COMMANDS.md`
+- **Inquiry / Block / Annotation JSON shapes** (backend-aligned): same file, section *Backend resource shapes*.
 - Short command list: `docs/COMANDOS.md`
 - Release history: `CHANGELOG.md`
 
-## What's New in v0.2.0
+## What's New in v0.3.0
 
-- Inquiry highlight workflows:
-  - `inquiry highlight get`
-  - `inquiry highlight set`
-  - `inquiry highlight preview-activate`
-  - `inquiry highlight versions list/show/revert`
-- Public discovery commands:
-  - `public list`, `public get`
-  - `public list-blocks`, `public get-block`, `public user-profile`
-- Social/tag commands:
-  - `social inquiries stats`, `related`, `add-tags`, `remove-tag`
-  - `social tags popular`, `search`
-- Research workflow improvements:
-  - batch block creation: `inquiry research add-blocks`
-  - inquiry annotations (comments)
-  - research summary command
-- HTTP provenance on writes with optional `NOTLABEL_ACTOR_LABEL`.
-- Expanded docs and agent helper commands (`skill`, `protocol`, `start`).
+- Research blocks: `get-block`, `update-block`, `delete-block`, `add-block-on-topic`.
+- Safer ergonomics: `--data` examples and warnings for source/reference; expanded `--linked-blocks` help.
+- Types and docs aligned with backend inquiry/block/annotation shapes; see `docs/CLI_COMMANDS.md` (*Backend resource shapes*).
+- `auth whoami` shows the same lab next-steps and API provenance text as `login` (plus wallet status).
+
+Earlier **v0.2.0** shipped highlights, public/social commands, batch blocks, annotations, summary, and provenance headers. Full history: `CHANGELOG.md`.
 
 ## Development
 

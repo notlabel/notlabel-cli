@@ -20,7 +20,12 @@ import {
   listHighlightVersionsCommand,
   revertHighlightCommand,
 } from "./commands/inquiry/highlight-versions.js";
+import { parseBlockOptionsForWrite } from "./commands/inquiry/block-cli-parse.js";
 import { addResearchBlockCommand } from "./commands/inquiry/research-add-block.js";
+import { addResearchBlockOnTopicCommand } from "./commands/inquiry/research-add-block-topic.js";
+import { deleteResearchBlockCommand } from "./commands/inquiry/research-delete-block.js";
+import { getResearchBlockCommand } from "./commands/inquiry/research-get-block.js";
+import { updateResearchBlockCommand } from "./commands/inquiry/research-update-block.js";
 import { listResearchBlocksCommand } from "./commands/inquiry/research-list-blocks.js";
 import { addResearchBlocksCommand } from "./commands/inquiry/research-add-blocks.js";
 import { summarizeResearchBlocksCommand } from "./commands/inquiry/research-summary.js";
@@ -55,7 +60,7 @@ const program = new Command();
 program
   .name("notlabel")
   .description("Official CLI for notlabel.org")
-  .version("0.2.0");
+  .version("0.3.0");
 
 // ── auth ──────────────────────────────────────────────────────────────────────
 const auth = program.command("auth").description("Authentication commands");
@@ -125,7 +130,9 @@ const inquiry = program
 
 inquiry
   .command("create")
-  .description("Create a new inquiry (default status is active on backend)")
+  .description(
+    "Create a new inquiry (backend often defaults status to active). Sends --preferred-language on create (default: en).",
+  )
   .requiredOption("--raw-input <text>", "User raw input (immutable after creation)")
   .option("--type <type>", "hypothesis | exploration | question", "exploration")
   .option("--status <status>", "drafting | active | archived")
@@ -359,7 +366,9 @@ const inquiryResearch = inquiry
 
 inquiryResearch
   .command("add-block <id>")
-  .description("Create a block on the inquiry (blocks are the primary research surface)")
+  .description(
+    "Create a block on the inquiry. Use --linked-blocks for graph edges between blocks in this inquiry. --data is JSON metadata (see --help after Options).",
+  )
   .requiredOption("--content <text>", "Block body text")
   .option(
     "--base-type <type>",
@@ -374,67 +383,31 @@ inquiryResearch
   .option("--title <text>", "Optional short title")
   .option(
     "--data <json>",
-    "Optional JSON payload for structured metadata (e.g. reference details).",
+    'JSON metadata. Source/reference example: {"url":"https://...","title":"...","authors":["A"],"year":2024}. Goal: {"priority":"high"|"medium"|"low"}.',
   )
   .option(
     "--linked-blocks <ids>",
-    "Comma-separated block ids to link (same inquiry).",
+    "Comma-separated ids of other blocks in this inquiry (links / graph). Example: blk1,blk2",
   )
   .option("--privacy <privacy>", "private | public")
   .option("--json", "Output created block as JSON for agents")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  Insight linked to sources:
+    notlabel inquiry research add-block INQ --content "Synthesis" --base-type insight --kind insight \\
+      --linked-blocks srcId1,srcId2 --json
+
+  Reference with structured --data:
+    notlabel inquiry research add-block INQ --base-type source --kind reference \\
+      --content "Key result: ..." \\
+      --data '{"url":"https://doi.org/10.1000/example","title":"Paper","authors":["Doe, J."],"year":2024}'
+`,
+  )
   .action(async (id, opts) => {
-    let dataObj: Record<string, unknown> | undefined;
-    if (opts.data) {
-      try {
-        dataObj = JSON.parse(opts.data);
-      } catch {
-        console.error(
-          "\x1b[31mError: --data must be valid JSON (e.g. '{\"url\":\"https://...\"}').\x1b[0m",
-        );
-        process.exit(1);
-      }
-    }
-
-    const baseType = opts.baseType as
-      | "note"
-      | "experiment"
-      | "source"
-      | "code"
-      | "insight"
-      | "custom";
-    const allowed = new Set([
-      "note",
-      "experiment",
-      "source",
-      "code",
-      "insight",
-      "custom",
-    ]);
-    if (!allowed.has(baseType)) {
-      console.error(
-        "\x1b[31mError: --base-type must be one of: note, experiment, source, code, insight, custom.\x1b[0m",
-      );
-      process.exit(1);
-    }
-
-    let privacy: "private" | "public" | undefined;
-    if (opts.privacy) {
-      if (opts.privacy !== "private" && opts.privacy !== "public") {
-        console.error(
-          "\x1b[31mError: --privacy must be private or public.\x1b[0m",
-        );
-        process.exit(1);
-      }
-      privacy = opts.privacy;
-    }
-
-    const linkedBlockIds = opts.linkedBlocks
-      ? opts.linkedBlocks
-          .split(",")
-          .map((s: string) => s.trim())
-          .filter(Boolean)
-      : undefined;
-
+    const { dataObj, linkedBlockIds, privacy, baseType } =
+      parseBlockOptionsForWrite(opts);
     await addResearchBlockCommand({
       id,
       content: opts.content,
@@ -448,6 +421,175 @@ inquiryResearch
       ...(privacy !== undefined ? { privacy } : {}),
       ...(opts.json !== undefined ? { json: opts.json } : {}),
     });
+  });
+
+inquiryResearch
+  .command("add-block-on-topic <topicId>")
+  .description(
+    "Create a block scoped to a Topic (POST /topics/:topicId/blocks). Use for pre-inquiry / topic canvas; links must be blocks on the same topic.",
+  )
+  .requiredOption("--content <text>", "Block body text")
+  .option(
+    "--base-type <type>",
+    "note | experiment | source | code | insight | custom",
+    "note",
+  )
+  .option(
+    "--kind <kind>",
+    "Kind label (default: note). E.g. reference for sources.",
+    "note",
+  )
+  .option("--title <text>", "Optional short title")
+  .option(
+    "--data <json>",
+    'JSON metadata (same conventions as add-block). Example: {"url":"https://...","title":"..."}',
+  )
+  .option(
+    "--linked-blocks <ids>",
+    "Comma-separated block ids on the same topic",
+  )
+  .option("--privacy <privacy>", "private | public")
+  .option("--json", "Output created block as JSON")
+  .action(async (topicId, opts) => {
+    const { dataObj, linkedBlockIds, privacy, baseType } = parseBlockOptionsForWrite(opts);
+    await addResearchBlockOnTopicCommand({
+      topicId,
+      content: opts.content,
+      kind: opts.kind,
+      baseType,
+      ...(opts.title !== undefined && opts.title !== ""
+        ? { title: opts.title }
+        : {}),
+      ...(dataObj !== undefined ? { data: dataObj } : {}),
+      ...(linkedBlockIds?.length ? { linkedBlockIds } : {}),
+      ...(privacy !== undefined ? { privacy } : {}),
+      ...(opts.json !== undefined ? { json: opts.json } : {}),
+    });
+  });
+
+inquiryResearch
+  .command("get-block <blockId>")
+  .description("GET one block by id (GET /blocks/:blockId)")
+  .option("--json", "Output block as JSON")
+  .action(async (blockId, opts) => {
+    await getResearchBlockCommand({
+      blockId,
+      json: opts.json,
+    });
+  });
+
+inquiryResearch
+  .command("update-block <blockId>")
+  .description(
+    "PATCH a block (PATCH /blocks/:blockId). When setting non-empty --linked-blocks, pass --inquiry-id or --topic-id for client-side validation.",
+  )
+  .option("--kind <kind>", "New kind label")
+  .option(
+    "--base-type <type>",
+    "note | experiment | source | code | insight | custom",
+  )
+  .option("--title <text>", "New title")
+  .option("--content <text>", "New body")
+  .option("--data <json>", "Replace structured metadata (JSON object)")
+  .option("--linked-blocks <ids>", "Replace links (comma-separated). Requires --inquiry-id or --topic-id if non-empty.")
+  .option("--inquiry-id <id>", "Inquiry id (for validating --linked-blocks)")
+  .option("--topic-id <id>", "Topic id (for validating topic-scoped links)")
+  .option("--privacy <privacy>", "private | public")
+  .option("--pinned <bool>", "true | false")
+  .option("--json", "Output updated block as JSON")
+  .action(async (blockId, opts) => {
+    let baseType:
+      | "note"
+      | "experiment"
+      | "source"
+      | "code"
+      | "insight"
+      | "custom"
+      | undefined;
+    if (opts.baseType) {
+      const allowed = new Set([
+        "note",
+        "experiment",
+        "source",
+        "code",
+        "insight",
+        "custom",
+      ]);
+      if (!allowed.has(opts.baseType)) {
+        console.error(
+          "\x1b[31mError: --base-type must be one of: note, experiment, source, code, insight, custom.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      baseType = opts.baseType;
+    }
+
+    let privacy: "private" | "public" | undefined;
+    if (opts.privacy) {
+      if (opts.privacy !== "private" && opts.privacy !== "public") {
+        console.error(
+          "\x1b[31mError: --privacy must be private or public.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      privacy = opts.privacy;
+    }
+
+    let isPinned: boolean | undefined;
+    if (opts.pinned !== undefined) {
+      if (opts.pinned !== "true" && opts.pinned !== "false") {
+        console.error(
+          "\x1b[31mError: --pinned must be true or false.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      isPinned = opts.pinned === "true";
+    }
+
+    let dataObj: Record<string, unknown> | undefined;
+    if (opts.data !== undefined) {
+      try {
+        dataObj = JSON.parse(opts.data);
+      } catch {
+        console.error(
+          "\x1b[31mError: --data must be valid JSON.\x1b[0m",
+        );
+        process.exit(1);
+      }
+    }
+
+    let linkedBlockIds: string[] | undefined;
+    if (opts.linkedBlocks !== undefined) {
+      linkedBlockIds = opts.linkedBlocks
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    }
+
+    await updateResearchBlockCommand({
+      blockId,
+      ...(opts.kind !== undefined ? { kind: opts.kind } : {}),
+      ...(baseType !== undefined ? { baseType } : {}),
+      ...(opts.title !== undefined ? { title: opts.title } : {}),
+      ...(opts.content !== undefined ? { content: opts.content } : {}),
+      ...(dataObj !== undefined ? { data: dataObj } : {}),
+      ...(linkedBlockIds !== undefined ? { linkedBlockIds } : {}),
+      ...(opts.inquiryId !== undefined
+        ? { inquiryIdForLinks: opts.inquiryId }
+        : {}),
+      ...(opts.topicId !== undefined ? { topicIdForLinks: opts.topicId } : {}),
+      ...(privacy !== undefined ? { privacy } : {}),
+      ...(isPinned !== undefined ? { isPinned } : {}),
+      json: opts.json,
+    });
+  });
+
+inquiryResearch
+  .command("delete-block <blockId>")
+  .description("Soft-delete a block (DELETE /blocks/:blockId)")
+  .option("--json", "Output { id, deleted } as JSON")
+  .action(async (blockId, opts) => {
+    await deleteResearchBlockCommand({ blockId, json: opts.json });
   });
 
 inquiryResearch
@@ -632,7 +774,7 @@ inquiryResearch
     "--sort <order>",
     "Sort: updatedAt:desc (default on server) | createdAt:desc",
   )
-  .option("--json", "Output blocks as JSON for agents")
+  .option("--json", "Output { items, pagination } as JSON for agents")
   .action(async (id, opts) => {
     let baseType:
       | "note"

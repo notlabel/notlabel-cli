@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { http, HttpError } from "../../core/http.js";
-import type { Block, CreateBlockBody } from "./types.js";
+import { warnBlockDataConventions } from "./block-data-hints.js";
+import type { Block, BlockBaseType, CreateBlockBody } from "./types.js";
 import { printJson } from "./common.js";
 
 interface BlockInput {
@@ -72,6 +73,7 @@ export async function addResearchBlocksCommand(
     }
 
     const base_type = item.base_type ?? "note";
+    warnBlockDataConventions(base_type as BlockBaseType, kind, item.data);
     const body: CreateBlockBody = {
       kind,
       base_type,

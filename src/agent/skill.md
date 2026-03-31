@@ -27,11 +27,13 @@ The CLI calls `NOTLABEL_API_URL` (default `https://notlabel-services.notlabel.or
 
 | Concept | Description |
 |---------|-------------|
-| **Inquiry** | Central research topic. Has `raw_input`, `refined_statement`, `type`, `status`, `preferred_language` (BCP-47; default `en`), `confidence`, `seed_topics`. Lifecycle: `drafting` → `active` → `archived`. |
-| **Block** | Research entry under an Inquiry. Has `base_type` (taxonomy) and `kind` (free-form label). |
-| **Block annotation** | Comment on a block (social layer): `body`, optional `parent_annotation_id` for replies on the **same block**. Anyone with inquiry read access can add; lists include author, block preview, and actor provenance when the client sent it. |
-| **Orbit Graph** | Generated on activation from `seed_topics`. Nodes = topics, edges = connections. |
+| **Inquiry** | Central research topic. Fields from the backend model include: `raw_input`, `refined_statement`, `type`, `status`, `confidence` (0–1), `privacy` (`private` \| `public`), `preferred_language` (API defaults to `en`; schema allows at least `en` and `es`), `seed_topics` (string labels), `seed_topic_ids` (Topic document ids), `root_topic_id` / `root_topic`, `orbit_graph_id`, `activated_at`, `collaborators` as `{ user_id, role: viewer\|editor\|maintainer }` (owner is the inquiry `user_id`). On **GET /inquiries/:id** with JWT, the API also returns `topics` (de-duplicated topic summaries: `id`, `label`, `slug`, `description`) and `my_role` (`owner` \| collaborator role). Lifecycle: `drafting` → `active` → `archived`. |
+| **Block** | Research entry. Scoped by **`inquiry_id`** (normal bench flow) and/or **`topic_id`** (pre-inquiry topic canvas until promoted). Has `base_type`, `kind`, optional `title` / `content`, `data` (mixed JSON), `linked_block_ids`, `privacy`, `is_pinned`. Responses may include **actor provenance** (`actor_kind`: `user_manual` \| `agent`, `actor_label`, `correlation_id`) when the write carried HTTP provenance headers. Collaborator **contributions** may set `contribution_kind`, `contribution_review_status` (`pending` \| `approved` \| `rejected`), review timestamps, and rejection reason. |
+| **Block annotation** | Comment on a block: `body`, optional `parent_annotation_id` (must be on the **same block**). Schema stores `hidden` and `deleted_at`; **lists omit** soft-deleted rows. Non-moderators typically do not see others’ `hidden: true` annotations in list results (unless they are the author). List/create payloads include `user` (`id`, `username`, `display_name`) and `block` preview (`id`, `title`, `kind`) plus optional actor fields. |
+| **Orbit Graph** | Generated on activation from seed topics. Nodes = topics, edges = connections. |
 | **Notification** | Delta feed for new research updates. |
+
+**Tip:** Always use `notlabel inquiry get <id> --json` when agents need exact collaborator roles, full `topics` arrays, or `seed_topic_ids`.
 
 ### Block Taxonomy
 
@@ -108,6 +110,23 @@ notlabel inquiry research add-block <id> \
   --json
 ```
 
+Edit, inspect, or remove a block:
+
+```bash
+notlabel inquiry research get-block <block-id> --json
+notlabel inquiry research update-block <block-id> --content "Corrected text" --json
+notlabel inquiry research delete-block <block-id> --json
+```
+
+Block scoped to a **Topic** (pre-inquiry canvas; API `POST /topics/:topicId/blocks`):
+
+```bash
+notlabel inquiry research add-block-on-topic <topic-id> \
+  --content "Note tied to this topic" --base-type note --kind note --json
+```
+
+Run `notlabel inquiry research add-block --help` for `--data` examples and `--linked-blocks` usage.
+
 ### Step 3a: Discover public inquiries (optional)
 
 Browse others’ public work with the same login (JWT). No API key needed in the CLI.
@@ -171,7 +190,7 @@ notlabel inquiry research list-blocks <id> --kind insight --page 0 --limit 20 --
 notlabel inquiry research list-blocks <id> --kind reference --json
 ```
 
-Response: `{ items: Block[], pagination: { total, limit, page, has_next } }`.
+JSON shape: `{ "items": Block[], "pagination": { "total", "limit", "page", "has_next" } }`. The array field is **`items`**, not `blocks`. Use `notlabel inquiry research get-block <block-id> --json` to fetch one block without scanning pages.
 
 ### Step 5: Poll notifications (delta feed)
 
@@ -221,4 +240,4 @@ Returns `{ inquiry, orbit_graph_id? }`. Activation triggers orbit graph generati
 | `notlabel help` | Command overview. |
 | `notlabel config --json` | Show backend URL. |
 
-For every flag and subcommand, use `notlabel <command> --help` or see `docs/CLI_COMMANDS.md` in the notlabel-cli repository.
+For every flag and subcommand, use `notlabel <command> --help` or see `docs/CLI_COMMANDS.md` in the notlabel-cli repository (section **Backend resource shapes** for inquiry/block/annotation JSON aligned with `notlabel-services`).
