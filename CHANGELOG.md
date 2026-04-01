@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-04-01
+
+### Added
+
+- Block taxonomy extended to match the blocks API: `base_type` values **`dataset`**, **`correction`**, and **`agent_finding`** (validated on `--base-type` for add/update/list and public list-blocks).
+- Optional CLI hygiene warnings in `block-data-hints` for those types (e.g. `target_block_id`, `confidence_score`, `format` / `columns`).
+- Agent onboarding: `notlabel start` and `notlabel help` mention **`NOTLABEL_ACTOR_LABEL`** for write attribution (details in `notlabel skill`).
+- Agent **SKILL.md**: richer block taxonomy guidance, document size limits, JSON field reference, and a **recommended fields** table (including **`--title`** on new blocks).
+
+### Changed
+
+- Single source of truth: **`BLOCK_BASE_TYPES`** in `src/commands/inquiry/types.ts` drives validation, help text, and `notlabel protocol` output (no duplicated allowlists).
+- `notlabel inquiry research summarize` (`by_base_type`) includes the new base types.
+- Documentation updates: `docs/CLI_COMMANDS.md`, `docs/COMANDOS.md`, `README.md`, `.env.example`; protocol copy aligned with taxonomy and agent payload hints.
+
 ## [0.3.0] - 2026-03-31
 
 ### Added

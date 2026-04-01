@@ -2,6 +2,8 @@ export function onboardingResearchCommand(): void {
   const lines = [
     "notlabel — Research onboarding",
     "",
+    "Optional (recommended for agents): set NOTLABEL_ACTOR_LABEL in .env so writes are attributed (see notlabel skill → HTTP provenance).",
+    "",
     "Quick start:",
     "1) Login",
     "   notlabel auth login",
@@ -13,7 +15,7 @@ export function onboardingResearchCommand(): void {
     "   notlabel inquiry update <inquiry-id> --refined-statement \"...\" --seed-topics \"topic1,topic2\" --confidence 0.8 --json",
     "",
     "4) Add your first research block",
-    "   notlabel inquiry research add-block <inquiry-id> --content \"First note\" --base-type note --kind note --json",
+    "   notlabel inquiry research add-block <inquiry-id> --content \"First note\" --base-type note --kind note --title \"First note\" --json",
     "",
     "5) Read recent insights and updates",
     "   notlabel inquiry research list-blocks <inquiry-id> --kind insight --page 0 --limit 20 --json",

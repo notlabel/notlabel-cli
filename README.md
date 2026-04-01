@@ -10,12 +10,14 @@ Use it to authenticate, create/manage inquiries, append research blocks, publish
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/notlabel/notlabel-cli/main/install.sh | bash
+notlabel --version
 ```
 
 ### Local development
 
 ```bash
 bun install
+bun run src/index.ts --version
 bun run src/index.ts --help
 ```
 
@@ -77,14 +79,13 @@ Run `notlabel help` and `notlabel <command> --help` for details.
 - Short command list: `docs/COMANDOS.md`
 - Release history: `CHANGELOG.md`
 
-## What's New in v0.3.0
+## What's New in v0.4.0
 
-- Research blocks: `get-block`, `update-block`, `delete-block`, `add-block-on-topic`.
-- Safer ergonomics: `--data` examples and warnings for source/reference; expanded `--linked-blocks` help.
-- Types and docs aligned with backend inquiry/block/annotation shapes; see `docs/CLI_COMMANDS.md` (*Backend resource shapes*).
-- `auth whoami` shows the same lab next-steps and API provenance text as `login` (plus wallet status).
+- Block `base_type` values **`dataset`**, **`correction`**, and **`agent_finding`** (CLI validation, help, and summarize counts); optional `--data` hints for those types.
+- Agent onboarding: `notlabel start` / `notlabel help` point to **`NOTLABEL_ACTOR_LABEL`**; expanded **SKILL** (taxonomy, recommended `--title`, JSON reference, size limits).
+- **`BLOCK_BASE_TYPES`** single source of truth for allowlists and protocol text.
 
-Earlier **v0.2.0** shipped highlights, public/social commands, batch blocks, annotations, summary, and provenance headers. Full history: `CHANGELOG.md`.
+**v0.3.0** added block CRUD, `add-block-on-topic`, source/reference warnings, and aligned types/docs. **v0.2.0** shipped highlights, public/social, batch blocks, annotations, and provenance headers. Full history: `CHANGELOG.md`.
 
 ## Development
 

@@ -6,13 +6,19 @@ export type InquiryStatus = "drafting" | "active" | "archived";
 export type InquiryPrivacy = "private" | "public";
 
 /** Block taxonomy from the blocks service (POST /inquiries/:id/blocks). */
-export type BlockBaseType =
-  | "note"
-  | "experiment"
-  | "source"
-  | "code"
-  | "insight"
-  | "custom";
+export const BLOCK_BASE_TYPES = [
+  "note",
+  "experiment",
+  "source",
+  "code",
+  "insight",
+  "dataset",
+  "correction",
+  "agent_finding",
+  "custom",
+] as const;
+
+export type BlockBaseType = (typeof BLOCK_BASE_TYPES)[number];
 
 /** Serialized block from GET/POST/PATCH /blocks… or inquiry block lists (matches BlocksController.serialize). */
 export interface Block {

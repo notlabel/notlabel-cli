@@ -7,7 +7,7 @@ import { printJson } from "./common.js";
 interface BlockInput {
   content?: string;
   kind?: string;
-  base_type?: "note" | "experiment" | "source" | "code" | "insight" | "custom";
+  base_type?: BlockBaseType;
   title?: string;
   data?: Record<string, unknown>;
   linked_block_ids?: string[];

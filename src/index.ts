@@ -54,13 +54,20 @@ import { listPopularTagsCommand } from "./commands/social/popular-tags.js";
 import { listRelatedInquiriesCommand } from "./commands/social/inquiry-related.js";
 import { removeInquiryTagCommand } from "./commands/social/remove-tag.js";
 import { searchTagsCommand } from "./commands/social/search-tags.js";
+import {
+  BLOCK_BASE_TYPES,
+  type BlockBaseType,
+} from "./commands/inquiry/types.js";
+
+const BASE_TYPE_SET = new Set<string>(BLOCK_BASE_TYPES);
+const BASE_TYPE_HELP = BLOCK_BASE_TYPES.join(" | ");
 
 const program = new Command();
 
 program
   .name("notlabel")
   .description("Official CLI for notlabel.org")
-  .version("0.3.0");
+  .version("0.4.0");
 
 // ── auth ──────────────────────────────────────────────────────────────────────
 const auth = program.command("auth").description("Authentication commands");
@@ -372,7 +379,7 @@ inquiryResearch
   .requiredOption("--content <text>", "Block body text")
   .option(
     "--base-type <type>",
-    "note | experiment | source | code | insight | custom",
+    BASE_TYPE_HELP,
     "note",
   )
   .option(
@@ -431,7 +438,7 @@ inquiryResearch
   .requiredOption("--content <text>", "Block body text")
   .option(
     "--base-type <type>",
-    "note | experiment | source | code | insight | custom",
+    BASE_TYPE_HELP,
     "note",
   )
   .option(
@@ -486,7 +493,7 @@ inquiryResearch
   .option("--kind <kind>", "New kind label")
   .option(
     "--base-type <type>",
-    "note | experiment | source | code | insight | custom",
+    BASE_TYPE_HELP,
   )
   .option("--title <text>", "New title")
   .option("--content <text>", "New body")
@@ -498,30 +505,15 @@ inquiryResearch
   .option("--pinned <bool>", "true | false")
   .option("--json", "Output updated block as JSON")
   .action(async (blockId, opts) => {
-    let baseType:
-      | "note"
-      | "experiment"
-      | "source"
-      | "code"
-      | "insight"
-      | "custom"
-      | undefined;
+    let baseType: BlockBaseType | undefined;
     if (opts.baseType) {
-      const allowed = new Set([
-        "note",
-        "experiment",
-        "source",
-        "code",
-        "insight",
-        "custom",
-      ]);
-      if (!allowed.has(opts.baseType)) {
+      if (!BASE_TYPE_SET.has(opts.baseType)) {
         console.error(
-          "\x1b[31mError: --base-type must be one of: note, experiment, source, code, insight, custom.\x1b[0m",
+          `\x1b[31mError: --base-type must be one of: ${BLOCK_BASE_TYPES.join(", ")}.\x1b[0m`,
         );
         process.exit(1);
       }
-      baseType = opts.baseType;
+      baseType = opts.baseType as BlockBaseType;
     }
 
     let privacy: "private" | "public" | undefined;
@@ -764,7 +756,7 @@ inquiryResearch
   .description("List blocks for an inquiry (filter by kind and paginate)")
   .option(
     "--base-type <type>",
-    "Filter: note | experiment | source | code | insight | custom",
+    `Filter: ${BASE_TYPE_HELP}`,
   )
   .option("--kind <kind>", "Filter by kind label")
   .option("--page <n>", "Page index >= 0 (default: 0)", (v) => parseInt(v, 10))
@@ -776,30 +768,15 @@ inquiryResearch
   )
   .option("--json", "Output { items, pagination } as JSON for agents")
   .action(async (id, opts) => {
-    let baseType:
-      | "note"
-      | "experiment"
-      | "source"
-      | "code"
-      | "insight"
-      | "custom"
-      | undefined;
+    let baseType: BlockBaseType | undefined;
     if (opts.baseType) {
-      const allowed = new Set([
-        "note",
-        "experiment",
-        "source",
-        "code",
-        "insight",
-        "custom",
-      ]);
-      if (!allowed.has(opts.baseType)) {
+      if (!BASE_TYPE_SET.has(opts.baseType)) {
         console.error(
-          "\x1b[31mError: --base-type must be one of: note, experiment, source, code, insight, custom.\x1b[0m",
+          `\x1b[31mError: --base-type must be one of: ${BLOCK_BASE_TYPES.join(", ")}.\x1b[0m`,
         );
         process.exit(1);
       }
-      baseType = opts.baseType;
+      baseType = opts.baseType as BlockBaseType;
     }
 
     let pinned: boolean | undefined;
@@ -1036,7 +1013,7 @@ publicInvestigations
   .description("Public blocks for a public inquiry (privacy=public only)")
   .option(
     "--base-type <type>",
-    "note | experiment | source | code | insight | custom",
+    `Filter: ${BASE_TYPE_HELP}`,
   )
   .option("--kind <kind>", "Filter by kind label")
   .option("--page <n>", "Page index >= 0", (v) => parseInt(v, 10))
@@ -1048,30 +1025,15 @@ publicInvestigations
   )
   .option("--json", "Output raw JSON for agents")
   .action(async (inquiryId, opts) => {
-    let baseType:
-      | "note"
-      | "experiment"
-      | "source"
-      | "code"
-      | "insight"
-      | "custom"
-      | undefined;
+    let baseType: BlockBaseType | undefined;
     if (opts.baseType) {
-      const allowed = new Set([
-        "note",
-        "experiment",
-        "source",
-        "code",
-        "insight",
-        "custom",
-      ]);
-      if (!allowed.has(opts.baseType)) {
+      if (!BASE_TYPE_SET.has(opts.baseType)) {
         console.error(
-          "\x1b[31mError: --base-type must be one of: note, experiment, source, code, insight, custom.\x1b[0m",
+          `\x1b[31mError: --base-type must be one of: ${BLOCK_BASE_TYPES.join(", ")}.\x1b[0m`,
         );
         process.exit(1);
       }
-      baseType = opts.baseType;
+      baseType = opts.baseType as BlockBaseType;
     }
     let pinned: boolean | undefined;
     if (opts.pinned !== undefined) {
@@ -1186,6 +1148,7 @@ program
       "",
       "Notes:",
       "- Inquiry and public discovery commands accept --json for machine-readable output.",
+      "- Agents: set NOTLABEL_ACTOR_LABEL in .env for write attribution (details: notlabel skill).",
       "- Backends and business rules are defined in the Orbit backend reference; this CLI only consumes that API.",
     ];
 

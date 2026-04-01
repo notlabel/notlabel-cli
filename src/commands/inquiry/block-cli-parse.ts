@@ -1,3 +1,9 @@
+import { BLOCK_BASE_TYPES, type BlockBaseType } from "./types.js";
+
+const ALLOWED_BASE_TYPES = new Set<string>(BLOCK_BASE_TYPES);
+
+const BASE_TYPE_LIST = BLOCK_BASE_TYPES.join(", ");
+
 export function parseBlockOptionsForWrite(opts: {
   data?: string;
   linkedBlocks?: string;
@@ -7,13 +13,7 @@ export function parseBlockOptionsForWrite(opts: {
   dataObj: Record<string, unknown> | undefined;
   linkedBlockIds: string[] | undefined;
   privacy: "private" | "public" | undefined;
-  baseType:
-    | "note"
-    | "experiment"
-    | "source"
-    | "code"
-    | "insight"
-    | "custom";
+  baseType: BlockBaseType;
 } {
   let dataObj: Record<string, unknown> | undefined;
   if (opts.data) {
@@ -27,32 +27,11 @@ export function parseBlockOptionsForWrite(opts: {
     }
   }
 
-  const baseTypeRaw = opts.baseType as
-    | "note"
-    | "experiment"
-    | "source"
-    | "code"
-    | "insight"
-    | "custom"
-    | undefined;
-  const allowed = new Set([
-    "note",
-    "experiment",
-    "source",
-    "code",
-    "insight",
-    "custom",
-  ]);
-  const bt = (baseTypeRaw ?? "note") as
-    | "note"
-    | "experiment"
-    | "source"
-    | "code"
-    | "insight"
-    | "custom";
-  if (!allowed.has(bt)) {
+  const baseTypeRaw = opts.baseType as string | undefined;
+  const bt = (baseTypeRaw ?? "note") as BlockBaseType;
+  if (!ALLOWED_BASE_TYPES.has(bt)) {
     console.error(
-      "\x1b[31mError: --base-type must be one of: note, experiment, source, code, insight, custom.\x1b[0m",
+      `\x1b[31mError: --base-type must be one of: ${BASE_TYPE_LIST}.\x1b[0m`,
     );
     process.exit(1);
   }

@@ -10,6 +10,7 @@ This document describes the **notlabel** CLI commands. Use `--json` on any inqui
 
 | Command | Description |
 |--------|-------------|
+| `notlabel --version` or `notlabel -V` | Print CLI version (from `package.json` / program version). |
 | `notlabel help` | Show high-level help (like `npm help`), including the main command tree and the recommended agent entrypoint. |
 
 Use this as the **standard discovery point** for new agents: they can call `notlabel help` to learn which families of commands exist, and then `notlabel <command> --help` for details.
@@ -33,6 +34,23 @@ Short top-level commands for agents working in the notlabel lab (no nested `comm
 | Command | Description |
 |--------|-------------|
 | `notlabel config` | Show backend URL (`NOTLABEL_API_URL`). Use `--json` for machine output. |
+
+### HTTP provenance — `NOTLABEL_ACTOR_LABEL`
+
+On **write** requests (`POST`, `PUT`, `PATCH`, `DELETE`), the CLI sends:
+
+| Header | Purpose |
+|--------|---------|
+| `x-notlabel-actor-label` | Stable label for who triggered the write (human vs agent vs which agent). |
+| `x-request-id` | One UUID per CLI process run, so related writes in the same command correlate. |
+
+**Configuration:** set the environment variable **`NOTLABEL_ACTOR_LABEL`** (e.g. in `.env`). If unset or empty, the CLI uses **`notlabel-cli`**.
+
+**Typical values:** a short stable id for your automation, e.g. `bench-agent`, `cursor-lab`, `my-research-bot`. Use the **same** header if you call the API manually with `curl`/SDKs so the backend can attribute traffic consistently.
+
+**Reads** (`GET`) do not send these headers (only `Authorization`).
+
+After `notlabel auth login` or `notlabel auth whoami` (human mode), the CLI prints a reminder about this behavior.
 
 ---
 
@@ -249,7 +267,11 @@ Backend validation (use `notlabel inquiry highlight set --help` for CLI options)
 
 ## Inquiry blocks (research canvas)
 
-Research content lives in **blocks** under each inquiry (`POST/GET /inquiries/:id/blocks`). Each block has a required taxonomy **`base_type`** (`note`, `experiment`, `source`, `code`, `insight`, `custom`) plus a free-form **`kind`** label (e.g. `reference`, `goal`, `question`). The API returns the created **block** JSON, not the full inquiry.
+Research content lives in **blocks** under each inquiry (`POST/GET /inquiries/:id/blocks`). Each block has a required taxonomy **`base_type`** (`note`, `experiment`, `source`, `code`, `insight`, `dataset`, `correction`, `agent_finding`, `custom`) plus a free-form **`kind`** label (e.g. `reference`, `goal`, `question`). Prefer a first-class `base_type` for recurring scientific shapes; use **`custom`** sparingly. The API returns the created **block** JSON, not the full inquiry.
+
+For **`base_type` `custom`**, **`kind`** may be **any label**, and **`data`** is a **free-form JSON object** (no fixed schema)—for one-off payloads that do not fit another row; see **`notlabel skill`** → *Block Taxonomy* for examples. If the same JSON shape repeats, prefer adding a dedicated `base_type` in the backend.
+
+**Size and files:** Each block is stored as a single MongoDB document—**maximum BSON size is 16 MB** for the whole document (`content` + `data` + …). Do not embed binary file contents; use **URL references** in `data` (and optional **block resources** via the REST API). This CLI does not ship block-resource upload commands—pass **`--data`** with URLs for attachments.
 
 ### research add-block
 
@@ -258,7 +280,7 @@ Create a block on an inquiry.
 ```bash
 notlabel inquiry research add-block <id> \
   --content "<text>" \
-  [--base-type note|experiment|source|code|insight|custom] \
+  [--base-type note|experiment|source|code|insight|dataset|correction|agent_finding|custom] \
   [--kind <label>] \
   [--title "<text>"] \
   [--data '{"key":"value",...}'] \
@@ -280,6 +302,7 @@ notlabel inquiry research add-block <id> \
 | `--json` | No | Output the created **block** as JSON. |
 
 **Notes:**
+- **Agents:** prefer **`--title`** on every new block so list views and previews stay readable; pair with **`--content`** and type-appropriate **`--data`** (see `notlabel skill` → *Recommended fields when creating blocks*).
 - List blocks with `inquiry research list-blocks` (JSON field is **`items`**, not `blocks`). Fetch one block: `inquiry research get-block <blockId>`.
 - For `base_type` **source** and `kind` **reference**, the CLI prints a **warning** if `--data` is missing a `url` (optional hygiene; the server may still accept the block).
 - The backend stores blocks in a dedicated collection; they are not embedded on `GET /inquiries/:id`.
@@ -293,7 +316,7 @@ Create a block under a **Topic** (`POST /topics/:topicId/blocks`). Useful for pr
 ```bash
 notlabel inquiry research add-block-on-topic <topicId> \
   --content "<text>" \
-  [--base-type note|experiment|source|code|insight|custom] \
+  [--base-type note|experiment|source|code|insight|dataset|correction|agent_finding|custom] \
   [--kind <label>] \
   [--title "<text>"] \
   [--data '<json>'] \

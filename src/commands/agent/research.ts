@@ -1,3 +1,7 @@
+import { BLOCK_BASE_TYPES } from "../inquiry/types.js";
+
+const BASE_TYPE_TAXONOMY = BLOCK_BASE_TYPES.join("|");
+
 /**
  * Agent-facing description of research-related CLI commands.
  *
@@ -9,13 +13,13 @@ export async function agentResearchCommands(): Promise<void> {
     "notlabel — canvas protocol (same as `notlabel protocol`)",
     "",
     "Inquiries hold the central topic; **blocks** are the primary surface for research",
-    "notes, sources, experiments, code snippets, insights, and custom content.",
+    "notes, sources, datasets, experiments, code, insights, corrections, agent findings—use **custom** only when nothing else fits.",
     "",
     "Core objects:",
     "- Inquiry: raw_input, refined_statement, type, status, preferred_language (default en), confidence, seed_topics, privacy.",
     "- Block (per inquiry):",
     "    kind (string label, required — e.g. reference, goal, question, idea)",
-    "    base_type (required taxonomy): note | experiment | source | code | insight | custom",
+    `    base_type (required taxonomy): ${BASE_TYPE_TAXONOMY}`,
     "    content?, title?, data? (JSON), linked_block_ids? (other blocks in the same inquiry)",
     "    privacy, is_pinned, timestamps",
     "",
@@ -34,7 +38,7 @@ export async function agentResearchCommands(): Promise<void> {
     "   Command:",
     "     notlabel inquiry research add-block <inquiry-id>",
     "       --content \"<text>\"",
-    "       [--base-type note|experiment|source|code|insight|custom]   (default: note)",
+    `       [--base-type ${BASE_TYPE_TAXONOMY}]   (default: note)`,
     "       [--kind <label>]                        (default: note)",
     "       [--title \"<short title>\"]",
     "       [--data '{\"key\":\"value\",...}']",
@@ -47,6 +51,10 @@ export async function agentResearchCommands(): Promise<void> {
     "     - base_type note + kind note         → observations",
     "     - base_type note + kind goal         → data: { priority?: \"high\"|\"medium\"|\"low\" }",
     "     - base_type insight + kind insight   → syntheses linking other blocks (use linked-blocks)",
+    "",
+    "   Recommended payload hygiene (agents):",
+    "     - Pass --title on almost every add-block: short preview for lists/UI (easy to omit; don’t skip it).",
+    "     - Keep --content as the main prose even when --data has structured metadata.",
     "",
     "   Behavior:",
     "     - Each POST creates one block; the API returns the block JSON (not the full inquiry).",
@@ -122,7 +130,7 @@ export async function agentResearchCommands(): Promise<void> {
     "   2. Check unread notifications for fresh updates (delta ingest).",
     "   3. For each investigation step:",
     "        - choose base_type and kind,",
-    "        - call: notlabel inquiry research add-block <id> --content \"...\" --kind <k> --json",
+    "        - call: notlabel inquiry research add-block <id> --title \"...\" --content \"...\" --kind <k> --json",
     "   4. Periodically call:",
     "        - notlabel inquiry research list-blocks <id> --kind insight --page 0 --limit 20 --json",
     "      for focused, incremental reads of the latest insight blocks.",

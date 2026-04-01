@@ -23,4 +23,28 @@ export function warnBlockDataConventions(
       );
     }
   }
+  if (baseType === "correction" && data && typeof data["target_block_id"] !== "string") {
+    console.warn(
+      "\x1b[33mWarning: for base_type correction, consider --data with target_block_id (Mongo id of the block being corrected).\x1b[0m",
+    );
+  }
+  if (
+    baseType === "agent_finding" &&
+    data &&
+    typeof data["confidence_score"] !== "number"
+  ) {
+    console.warn(
+      "\x1b[33mWarning: for base_type agent_finding, consider --data with confidence_score (0–1) and model_id.\x1b[0m",
+    );
+  }
+  if (
+    baseType === "dataset" &&
+    data &&
+    typeof data["format"] !== "string" &&
+    typeof data["columns"] === "undefined"
+  ) {
+    console.warn(
+      "\x1b[33mWarning: for base_type dataset, consider --data with format and/or columns for reproducibility.\x1b[0m",
+    );
+  }
 }

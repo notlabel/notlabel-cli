@@ -3,6 +3,7 @@
 Short list of entrypoints. For full flags, behavior, and **API/JSON shapes** (inquiry, block, annotation), see `docs/CLI_COMMANDS.md`.
 
 ```
+notlabel --version
 notlabel help
 notlabel login
 notlabel skill
