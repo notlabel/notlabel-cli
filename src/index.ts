@@ -3,6 +3,10 @@
 // Bun loads .env automatically in development (bun run / bun dev).
 // No extra call needed — Bun reads .env from the project root by default.
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { Command } from "commander";
 import { loginCommand } from "./commands/auth/login.js";
 import { logoutCommand } from "./commands/auth/logout.js";
@@ -35,6 +39,7 @@ import {
   listBlockAnnotationsForBlockCommand,
   listBlockAnnotationsForInquiryCommand,
   setBlockAnnotationHiddenCommand,
+  updateBlockAnnotationCommand,
 } from "./commands/inquiry/research-annotations.js";
 import { agentResearchCommands } from "./commands/agent/research.js";
 import { printAgentSkill } from "./commands/agent/skill-print.js";
@@ -62,12 +67,25 @@ import {
 const BASE_TYPE_SET = new Set<string>(BLOCK_BASE_TYPES);
 const BASE_TYPE_HELP = BLOCK_BASE_TYPES.join(" | ");
 
+/** `package.json` one level above this file (`src/` dev or `dist/` npm bundle). */
+function readPackageVersion(): string {
+  try {
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = join(dir, "..", "package.json");
+    const raw = readFileSync(pkgPath, "utf8");
+    const v = (JSON.parse(raw) as { version?: string }).version;
+    return typeof v === "string" && v.length > 0 ? v : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
 const program = new Command();
 
 program
   .name("notlabel")
   .description("Official CLI for notlabel.org")
-  .version("0.4.0");
+  .version(readPackageVersion());
 
 // ── auth ──────────────────────────────────────────────────────────────────────
 const auth = program.command("auth").description("Authentication commands");
@@ -138,11 +156,12 @@ const inquiry = program
 inquiry
   .command("create")
   .description(
-    "Create a new inquiry (backend often defaults status to active). Sends --preferred-language on create (default: en).",
+    "Create a new inquiry (backend often defaults status to active). Sends --preferred-language on create (default: en). Optional --privacy private|public.",
   )
   .requiredOption("--raw-input <text>", "User raw input (immutable after creation)")
   .option("--type <type>", "hypothesis | exploration | question", "exploration")
   .option("--status <status>", "drafting | active | archived")
+  .option("--privacy <privacy>", "private | public")
   .option(
     "--preferred-language <code>",
     "BCP-47 locale (e.g. en, es)",
@@ -161,10 +180,21 @@ inquiry
       );
       process.exit(1);
     }
+    let privacy: "private" | "public" | undefined;
+    if (opts.privacy !== undefined) {
+      if (opts.privacy !== "private" && opts.privacy !== "public") {
+        console.error(
+          "\x1b[31mError: --privacy must be private or public.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      privacy = opts.privacy;
+    }
     await createInquiryCommand({
       rawInput: opts.rawInput,
       type: opts.type,
       ...(opts.status !== undefined ? { status: opts.status } : {}),
+      ...(privacy !== undefined ? { privacy } : {}),
       preferredLanguage: opts.preferredLanguage,
       json: opts.json,
     });
@@ -180,23 +210,37 @@ inquiry
 
 inquiry
   .command("update <id>")
-  .description("Update inquiry (refined_statement, confidence, seed_topics, type, preferred_language). No raw_input.")
+  .description(
+    "Update inquiry (refined_statement, confidence, seed_topics, type, privacy, preferred_language). No raw_input.",
+  )
   .option("--refined-statement <text>", "Refined statement from agent")
   .option("--confidence <number>", "Confidence 0-1", (v) => parseFloat(v))
   .option("--seed-topics <items>", "Comma-separated seed topics", (v) => v.split(",").map((s) => s.trim()).filter(Boolean))
   .option("--type <type>", "hypothesis | exploration | question")
+  .option("--privacy <privacy>", "private | public")
   .option(
     "--preferred-language <code>",
     "Preferred language (BCP-47, e.g. en, es)",
   )
   .option("--json", "Output raw JSON for agents")
   .action(async (id, opts) => {
+    let privacy: "private" | "public" | undefined;
+    if (opts.privacy !== undefined) {
+      if (opts.privacy !== "private" && opts.privacy !== "public") {
+        console.error(
+          "\x1b[31mError: --privacy must be private or public.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      privacy = opts.privacy;
+    }
     await updateInquiryCommand({
       id,
       refinedStatement: opts.refinedStatement,
       confidence: opts.confidence,
       seedTopics: opts.seedTopics,
       type: opts.type,
+      ...(privacy !== undefined ? { privacy } : {}),
       ...(opts.preferredLanguage !== undefined
         ? { preferredLanguage: opts.preferredLanguage }
         : {}),
@@ -239,7 +283,7 @@ inquiryHighlight
 inquiryHighlight
   .command("set <id>")
   .description(
-    "PUT highlight from --file JSON or --title, --abstract, --key-findings (JSON array)",
+    "PUT highlight from --file JSON or --title, --abstract, --key-findings (JSON array). With only --body-md / --body-md-file, merges into the existing highlight (GET + PUT).",
   )
   .option(
     "--file <path>",
@@ -249,7 +293,7 @@ inquiryHighlight
   .option("--abstract <text>", "Summary (50–3000 chars); required with inline mode")
   .option(
     "--key-findings <json>",
-    'JSON array of strings, e.g. [\"a\",\"b\"]; 1–12 items; required with inline mode',
+    'JSON array of strings, e.g. [\"a\",\"b\"]; 1–12 items; required with inline mode unless you only pass --body-md / --body-md-file',
   )
   .option("--open-questions <json>", "Optional JSON array (max 20 strings)")
   .option("--next-steps <json>", "Optional JSON array (max 20 strings)")
@@ -258,7 +302,10 @@ inquiryHighlight
     "Comma-separated block ids for this inquiry (max 100)",
   )
   .option("--body-md <text>", "Full report markdown (optional, max 50k chars)")
-  .option("--body-md-file <path>", "Read body_md from file (overrides --body-md)")
+  .option(
+    "--body-md-file <path>",
+    "Read body_md from file (overrides --body-md). Alone: updates body_md only (requires an existing highlight).",
+  )
   .option("--json", "Output saved highlight as JSON")
   .action(async (id, opts) => {
     const evidence = opts.evidenceBlockIds
@@ -376,7 +423,10 @@ inquiryResearch
   .description(
     "Create a block on the inquiry. Use --linked-blocks for graph edges between blocks in this inquiry. --data is JSON metadata (see --help after Options).",
   )
-  .requiredOption("--content <text>", "Block body text")
+  .option(
+    "--content <text>",
+    "Block body (optional for --base-type source when --data includes a non-empty \"url\")",
+  )
   .option(
     "--base-type <type>",
     BASE_TYPE_HELP,
@@ -397,6 +447,7 @@ inquiryResearch
     "Comma-separated ids of other blocks in this inquiry (links / graph). Example: blk1,blk2",
   )
   .option("--privacy <privacy>", "private | public")
+  .option("--pinned <bool>", "Pin on create: true | false (default: false)")
   .option("--json", "Output created block as JSON for agents")
   .addHelpText(
     "after",
@@ -410,14 +461,28 @@ Examples:
     notlabel inquiry research add-block INQ --base-type source --kind reference \\
       --content "Key result: ..." \\
       --data '{"url":"https://doi.org/10.1000/example","title":"Paper","authors":["Doe, J."],"year":2024}'
+
+  Link-only source (no --content when url is in --data):
+    notlabel inquiry research add-block INQ --base-type source --kind reference \\
+      --data '{"url":"https://doi.org/10.1000/example","title":"Paper"}' --json
 `,
   )
   .action(async (id, opts) => {
     const { dataObj, linkedBlockIds, privacy, baseType } =
       parseBlockOptionsForWrite(opts);
+    let isPinned: boolean | undefined;
+    if (opts.pinned !== undefined) {
+      if (opts.pinned !== "true" && opts.pinned !== "false") {
+        console.error(
+          "\x1b[31mError: --pinned must be true or false.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      isPinned = opts.pinned === "true";
+    }
     await addResearchBlockCommand({
       id,
-      content: opts.content,
+      ...(opts.content !== undefined ? { content: opts.content } : {}),
       kind: opts.kind,
       baseType,
       ...(opts.title !== undefined && opts.title !== ""
@@ -426,6 +491,7 @@ Examples:
       ...(dataObj !== undefined ? { data: dataObj } : {}),
       ...(linkedBlockIds?.length ? { linkedBlockIds } : {}),
       ...(privacy !== undefined ? { privacy } : {}),
+      ...(isPinned === true ? { isPinned: true } : {}),
       ...(opts.json !== undefined ? { json: opts.json } : {}),
     });
   });
@@ -435,7 +501,10 @@ inquiryResearch
   .description(
     "Create a block scoped to a Topic (POST /topics/:topicId/blocks). Use for pre-inquiry / topic canvas; links must be blocks on the same topic.",
   )
-  .requiredOption("--content <text>", "Block body text")
+  .option(
+    "--content <text>",
+    "Block body (optional for --base-type source when --data includes a non-empty \"url\")",
+  )
   .option(
     "--base-type <type>",
     BASE_TYPE_HELP,
@@ -456,12 +525,23 @@ inquiryResearch
     "Comma-separated block ids on the same topic",
   )
   .option("--privacy <privacy>", "private | public")
+  .option("--pinned <bool>", "Pin on create: true | false (default: false)")
   .option("--json", "Output created block as JSON")
   .action(async (topicId, opts) => {
     const { dataObj, linkedBlockIds, privacy, baseType } = parseBlockOptionsForWrite(opts);
+    let isPinnedTopic: boolean | undefined;
+    if (opts.pinned !== undefined) {
+      if (opts.pinned !== "true" && opts.pinned !== "false") {
+        console.error(
+          "\x1b[31mError: --pinned must be true or false.\x1b[0m",
+        );
+        process.exit(1);
+      }
+      isPinnedTopic = opts.pinned === "true";
+    }
     await addResearchBlockOnTopicCommand({
       topicId,
-      content: opts.content,
+      ...(opts.content !== undefined ? { content: opts.content } : {}),
       kind: opts.kind,
       baseType,
       ...(opts.title !== undefined && opts.title !== ""
@@ -470,6 +550,7 @@ inquiryResearch
       ...(dataObj !== undefined ? { data: dataObj } : {}),
       ...(linkedBlockIds?.length ? { linkedBlockIds } : {}),
       ...(privacy !== undefined ? { privacy } : {}),
+      ...(isPinnedTopic === true ? { isPinned: true } : {}),
       ...(opts.json !== undefined ? { json: opts.json } : {}),
     });
   });
@@ -881,6 +962,21 @@ inquiryResearchAnnotations
       blockId,
       body: opts.body,
       ...(opts.parent !== undefined ? { parentAnnotationId: opts.parent } : {}),
+      json: opts.json,
+    });
+  });
+
+inquiryResearchAnnotations
+  .command("update <inquiryId> <blockId> <annotationId>")
+  .description("Edit annotation text in place (author or owner/maintainer)")
+  .requiredOption("--body <text>", "New comment body (1–8000 chars)")
+  .option("--json", "Output updated annotation as JSON")
+  .action(async (inquiryId, blockId, annotationId, opts) => {
+    await updateBlockAnnotationCommand({
+      inquiryId,
+      blockId,
+      annotationId,
+      body: opts.body,
       json: opts.json,
     });
   });

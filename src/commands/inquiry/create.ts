@@ -1,11 +1,17 @@
 import { http } from "../../core/http.js";
 import { handleApiError, printJson } from "./common.js";
-import type { Inquiry, CreateInquiryBody, InquiryStatus } from "./types.js";
+import type {
+  Inquiry,
+  CreateInquiryBody,
+  InquiryPrivacy,
+  InquiryStatus,
+} from "./types.js";
 
 export interface CreateInquiryOptions {
   rawInput: string;
   type?: "hypothesis" | "exploration" | "question";
   status?: InquiryStatus;
+  privacy?: InquiryPrivacy;
   /** BCP-47 code; defaults to `en` when omitted (matches backend default). */
   preferredLanguage?: string;
   json?: boolean;
@@ -31,6 +37,7 @@ export async function createInquiryCommand(opts: CreateInquiryOptions): Promise<
     type: opts.type ?? "exploration",
     preferred_language: lang,
     ...(opts.status !== undefined ? { status: opts.status } : {}),
+    ...(opts.privacy !== undefined ? { privacy: opts.privacy } : {}),
   };
 
   let inquiry: Inquiry;
@@ -42,6 +49,9 @@ export async function createInquiryCommand(opts: CreateInquiryOptions): Promise<
 
   if (opts.json) {
     printJson(inquiry);
+    console.warn(
+      "Note: raw_input cannot be changed after creation; use `notlabel inquiry update <id> --refined-statement \"…\"` to iterate the research question.",
+    );
     return;
   }
 
@@ -51,5 +61,9 @@ export async function createInquiryCommand(opts: CreateInquiryOptions): Promise<
   console.log(`type:   ${inquiry.type}`);
   if (inquiry.preferred_language)
     console.log(`lang:   ${inquiry.preferred_language}`);
+  if (inquiry.privacy) console.log(`privacy: ${inquiry.privacy}`);
+  console.log(
+    "\x1b[33mNote:\x1b[0m raw_input is stored permanently; refine the question later with `notlabel inquiry update <id> --refined-statement \"…\"`.",
+  );
   console.log();
 }

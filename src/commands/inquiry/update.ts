@@ -1,6 +1,6 @@
 import { http } from "../../core/http.js";
 import { handleApiError, printJson } from "./common.js";
-import type { Inquiry, UpdateInquiryBody } from "./types.js";
+import type { Inquiry, InquiryPrivacy, UpdateInquiryBody } from "./types.js";
 
 export interface UpdateInquiryOptions {
   id: string;
@@ -8,6 +8,7 @@ export interface UpdateInquiryOptions {
   confidence?: number;
   seedTopics?: string[];
   type?: "hypothesis" | "exploration" | "question";
+  privacy?: InquiryPrivacy;
   preferredLanguage?: string;
   json?: boolean;
 }
@@ -26,6 +27,7 @@ export async function updateInquiryCommand(opts: UpdateInquiryOptions): Promise<
   if (opts.confidence !== undefined) body.confidence = opts.confidence;
   if (opts.seedTopics !== undefined) body.seed_topics = opts.seedTopics;
   if (opts.type !== undefined) body.type = opts.type;
+  if (opts.privacy !== undefined) body.privacy = opts.privacy;
   if (opts.preferredLanguage !== undefined) {
     const lang = opts.preferredLanguage.trim();
     if (!lang) {
@@ -39,7 +41,7 @@ export async function updateInquiryCommand(opts: UpdateInquiryOptions): Promise<
 
   if (Object.keys(body).length === 0) {
     console.error(
-      "\x1b[31mError: provide at least one of --refined-statement, --confidence, --seed-topics, --type, --preferred-language.\x1b[0m",
+      "\x1b[31mError: provide at least one of --refined-statement, --confidence, --seed-topics, --type, --privacy, --preferred-language.\x1b[0m",
     );
     process.exit(1);
   }
@@ -68,6 +70,7 @@ export async function updateInquiryCommand(opts: UpdateInquiryOptions): Promise<
   }
   if (inquiry.refined_statement) console.log(`refined_statement: ${inquiry.refined_statement}`);
   if (inquiry.seed_topics?.length) console.log(`seed_topics: ${inquiry.seed_topics.join(", ")}`);
+  if (inquiry.privacy) console.log(`privacy: ${inquiry.privacy}`);
   if (inquiry.preferred_language)
     console.log(`preferred_language: ${inquiry.preferred_language}`);
   console.log();

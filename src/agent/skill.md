@@ -5,8 +5,9 @@ description: >-
   append research blocks (notes, sources, insights, experiments, code), add
   block annotations for human–agent collaboration, browse public inquiries,
   poll notifications for delta updates, and optionally refine inquiries or
-  trigger activation when needed. Use when the user mentions notlabel,
-  inquiries, research blocks, annotations, public discovery, seed topics,
+  trigger activation when needed. Agents should set NOTLABEL_ACTOR_LABEL to a
+  model-specific name (not the default notlabel-cli). Use when the user mentions
+  notlabel, inquiries, research blocks, annotations, public discovery, seed topics,
   notifications, or asks to log research or add a research note.
 ---
 
@@ -18,13 +19,24 @@ The `notlabel` CLI is the primary interface for agents to interact with the notl
 
 ## Prerequisites
 
-1. Install: `curl -fsSL https://raw.githubusercontent.com/notlabel/notlabel-cli/main/install.sh | bash`
-2. Authenticate: `notlabel auth login` (opens browser OAuth flow); alias: `notlabel login`
-3. Verify: `notlabel auth whoami --json`
+1. Install: `npm install -g notlabel` (Node.js ≥ 18)
+2. **Canonical agent doc:** [https://notlabel.org/agent.md](https://notlabel.org/agent.md) — this page; use it as the source of truth for agent onboarding (replaces maintaining a separate copy only in the CLI).
+3. **Authenticate (manual, human step):** `notlabel auth login` (alias: `notlabel login`) starts a **browser OAuth** flow. **The person using the CLI must run this command themselves in their own terminal**, complete the sign-in in the browser, and return to the shell. Autonomous agents cannot substitute for that step: they should ask the user to log in once on the machine where `notlabel` is installed before any authenticated commands will work.
+4. Verify: `notlabel auth whoami --json`
+
+Alternative installer: `curl -fsSL https://raw.githubusercontent.com/notlabel/notlabel-cli/main/install.sh | bash`
 
 The CLI calls `NOTLABEL_API_URL` (default `https://notlabel-services.notlabel.org/api/v1`). Override via `.env` or env var.
 
-**HTTP provenance:** On writes (POST/PATCH/PUT/DELETE), the CLI sends `x-notlabel-actor-label` (default `notlabel-cli`) and `x-request-id` per run. Set **`NOTLABEL_ACTOR_LABEL`** to a stable name for your agent (e.g. `my-research-agent`). If you call the API with `fetch`/curl instead of this CLI, send **`x-notlabel-actor-label`** the same way so the backend can distinguish agent vs manual UI.
+**HTTP provenance (who wrote this change):** On writes (POST/PATCH/PUT/DELETE), the CLI sends `x-notlabel-actor-label` and `x-request-id` per run. The **default label is `notlabel-cli`**, which is correct for the generic CLI binary but **not** ideal for coding agents: every assistant would look the same in the UI and logs.
+
+**Recommendation:** Set **`NOTLABEL_ACTOR_LABEL`** (same value the CLI sends as `x-notlabel-actor-label`) to something **specific to the model or product you are running in**, so humans can tell Claude from GPT from Cursor at a glance. Prefer a **stable** string per product line (avoid a new random id every run). Examples you can copy or adapt:
+
+- `anthropic-claude-sonnet-4` — Anthropic Claude in Sonnet 4 class
+- `openai-gpt-5.1-codex` — OpenAI Codex / GPT-family agent in the terminal
+- `cursor-composer` — Cursor editor agent (Composer or similar)
+
+If you call the API with `fetch`/curl instead of this CLI, send **`x-notlabel-actor-label`** with the same convention so the backend can distinguish **which** agent acted, not only “agent vs manual UI”.
 
 ## Core Concepts
 
@@ -32,7 +44,8 @@ The CLI calls `NOTLABEL_API_URL` (default `https://notlabel-services.notlabel.or
 |---------|-------------|
 | **Inquiry** | Central research topic. Fields include: `raw_input`, `refined_statement`, `type`, `status`, `confidence` (0–1), `privacy` (`private` \| `public`), `preferred_language` (API defaults to `en`; schema allows at least `en` and `es`), `seed_topics` (string labels), `seed_topic_ids`, `root_topic_id` / `root_topic`, `orbit_graph_id`, `activated_at`, `collaborators` as `{ user_id, role: viewer\|editor\|maintainer }` (owner is the inquiry `user_id`). On **GET /inquiries/:id** with JWT, the API also returns `topics` (de-duplicated: `id`, `label`, `slug`, `description`) and `my_role` (`owner` \| collaborator role). Lifecycle: `drafting` → `active` → `archived`. **New inquiries are often created `active` by default**—always use `notlabel inquiry get <id> --json` to confirm `status` in your environment. |
 | **Block** | Research entry. Scoped by **`inquiry_id`** (primary inquiry canvas) and/or **`topic_id`** (topic-scoped / pre-promotion canvas). Has `base_type`, `kind`, optional `title` / `content`, `data` (mixed JSON), `linked_block_ids`, `privacy`, `is_pinned`. Responses may include **actor provenance** (`actor_kind`: `user_manual` \| `agent`, `actor_label`, `correlation_id`) when the write carried HTTP provenance headers. Collaborator **contributions** may include `contribution_kind`, `contribution_review_status` (`pending` \| `approved` \| `rejected`), review timestamps, and rejection reason. New blocks typically **inherit inquiry privacy** unless you set `--privacy`. |
-| **Block annotation** | Comment on a block: `body`, optional `parent_annotation_id` (must be on the **same block**). Schema stores `hidden` and `deleted_at`; **lists omit** soft-deleted rows. Non-moderators typically do not see others’ `hidden: true` annotations in list results (unless they are the author). List/create payloads include `user` (`id`, `username`, `display_name`) and `block` preview (`id`, `title`, `kind`) plus optional actor fields. |
+| **Block annotation** | Comment on a block: `body`, optional `parent_annotation_id` (must be on the **same block**). Schema stores `hidden` and `deleted_at`; **lists omit** soft-deleted rows. Non-moderators typically do not see others’ `hidden: true` annotations in list results (unless they are the author). List/create payloads include `user` (`id`, `username`, `display_name`) and a small **block** preview object (`id`, `title`, `kind`)—that is **not** the same as **InquiryHighlight** below. |
+| **InquiryHighlight** | Structured inquiry summary the product often calls **highlight** or **preview**: fields such as `inquiry_id`, `user_id`, `title`, `abstract`, `key_findings`, `open_questions`, `next_steps`, `body_md`, `evidence_block_ids`, `version`, etc. In **notlabel-services** this is the Mongoose model **`InquiryHighlight`**; the default Mongo collection name is **`inquiryhighlights`**. There is **no** separate document type whose collection is literally named `preview`—API routes or flows labeled “preview” (e.g. **preview-highlight-activate**) **generate and persist** this highlight document. Each time a new highlight version is saved, a **revision snapshot** is stored in **`inquiryhighlightrevisions`** (history keyed by `version`). CLI surface: `notlabel inquiry highlight …`. |
 | **Orbit Graph** | Optional: generated when an inquiry is **activated** from seed topics (nodes = topics, edges = connections). Not required for everyday block capture. |
 | **Notification** | Delta feed for new research updates. |
 
@@ -60,6 +73,14 @@ Put structured payloads in **`data`** (JSON). Link evidence with **`--linked-blo
 
 **Note:** Each block response may include **`actor_kind`** (`user_manual` \| `agent`) and **`actor_label`** when the client sent HTTP provenance on write—the CLI sets **`NOTLABEL_ACTOR_LABEL`** / `x-notlabel-actor-label` so you can tell manual UI edits from agent writes. **`user_id`** on the block remains authoritative for ownership.
 
+### Collaboration boundaries (what you may change)
+
+Always run `notlabel inquiry get <id> --json` and inspect **`my_role`** (`owner` \| `viewer` \| `editor` \| `maintainer`) before writing.
+
+- **Inquiry is “yours” for canvas edits** when you are the **`owner`**, or a collaborator with **`editor`** or **`maintainer`**: you may add, update, and delete blocks (and other CLI actions the API allows for that role), refine the inquiry, manage annotations, and use owner-only features where documented (e.g. highlight **set** is owner-only).
+- **Inquiry is not yours for structural edits** when you are only a **`viewer`**, or you are browsing someone else’s work **without** collaborator write access (e.g. **public** discovery): **do not** add or rewrite blocks as if you owned the canvas. **Participate with annotations only** (comments on blocks—questions, review, threading) where the API and your login permit it.
+- **Need your own thread:** If you require full control to continue a line of research under **your** inquiry, use the product **fork** flow (or **create a new inquiry**) instead of trying to reshape another owner’s canvas.
+
 ### Block size and file references
 
 - **Maximum stored size:** Each block is one **MongoDB document** (BSON). The server limit is **16 MB per document** for the **entire** block—`content`, `title`, `kind`, serialized **`data`**, and other fields count together. The API does not define smaller per-field caps today; keep payloads well under **16 MB** total.
@@ -72,11 +93,11 @@ Use these on every `add-block` / `add-block-on-topic` when it makes sense so lis
 | Field | Guidance |
 |-------|----------|
 | **`--title`** | **Strongly recommended:** 3–12 words summarizing the block. Many surfaces show title + kind before `content`; blocks without a title are harder to skim. |
-| **`--content`** | Main body (finding, observation, quote context). Still required for most block types even when `data` carries structured fields. |
+| **`--content`** | Main body (finding, observation, quote context). Required for most types; for **`base_type` `source`**, you may omit it when **`--data`** includes a non-empty string **`url`** (link-only reference). |
 | **`--data`** | Match the **Block Taxonomy** table for your `base_type` / `kind` (sources, goals, experiments, datasets, corrections, agent findings, code, etc.). |
 | **`--linked-blocks`** | **Insights** and structured syntheses: comma-separated ids of evidence blocks in the same inquiry (maps to `linked_block_ids`). |
 
-Optional: `--privacy`, and `--pinned` via `update-block` when the canvas should highlight a block.
+Optional: `--privacy`; **`--pinned true|false`** on **`add-block`** / **`add-block-on-topic`** to pin on create, or **`update-block --pinned`** afterward.
 
 ## JSON field reference (`--json` output and writes)
 
@@ -108,13 +129,14 @@ Public discovery responses omit collaborator-rich shapes.
 | Actor (when present) | `actor_kind` (`user_manual` \| `agent`), `actor_label`, `correlation_id`. |
 | Contributions (when present) | `contribution_kind`, `contribution_review_status`, review metadata. |
 
-**Create body** (via CLI flags): `content` (required on add), `base_type`, `kind`, `title`, `data`, `linked_block_ids`, `privacy`.
+**Create body** (via CLI flags): `content` (required on add except **source** with `data.url`), `base_type`, `kind`, `title`, `data`, `linked_block_ids`, `privacy`, `is_pinned` (optional).
 
 ### Block annotation (list / create)
 
 | Area | Notes |
 |------|--------|
 | Create | `{ body: string (1–8000), parent_annotation_id?: string }` — parent must be on the **same block**. |
+| Update | `PATCH …/annotations/:annotationId` with `{ body }` — same length as create; **author** or **owner/maintainer** (CLI: `annotations update …`). |
 | List items | `body`, `parent_annotation_id`, `hidden`, `user`, `block` preview, optional `actor_*`, timestamps. |
 
 ## Agent Research Workflow
@@ -124,6 +146,8 @@ Public discovery responses omit collaborator-rich shapes.
 ```bash
 # Create new (backend often returns status active by default—confirm with get)
 notlabel inquiry create --raw-input "<user research question>" --type exploration --json
+# Optional inquiry visibility (defaults follow backend when omitted):
+notlabel inquiry create --raw-input "…" --type exploration --privacy public --json
 
 # Or list existing
 notlabel inquiry list --status active --json
@@ -132,7 +156,7 @@ notlabel inquiry list --status active --json
 notlabel inquiry get <id> --json
 ```
 
-Capture `inquiry.id` from the response. **Do not assume `drafting`** unless `get` shows it.
+Capture `inquiry.id` from the response. **Do not assume `drafting`** unless `get` shows it. After `inquiry get`, check **`my_role`** before adding or editing blocks (see **Collaboration boundaries**). The CLI prints a **note after `inquiry create`**: **`raw_input` is permanent**; iterate the question with **`inquiry update --refined-statement`** (see **Key Rules**).
 
 ### Step 2: Refine the Inquiry (optional)
 
@@ -142,6 +166,8 @@ notlabel inquiry update <id> \
   --seed-topics "topic1,topic2,topic3" \
   --confidence 0.85 \
   --json
+# Or change visibility only:
+notlabel inquiry update <id> --privacy public --json
 ```
 
 If the inquiry already has a **ready** orbit graph, new `seed_topics` are automatically added as nodes with edges to existing nodes.
@@ -166,6 +192,17 @@ notlabel inquiry research add-block <id> \
   --content "Key findings from paper" \
   --base-type source \
   --kind reference \
+  --data '{"url":"https://...","title":"Paper Title","authors":["Author"],"year":2026}' \
+  --json
+```
+
+Link-only source (no `--content` when `url` is in `--data`):
+
+```bash
+notlabel inquiry research add-block <id> \
+  --base-type source \
+  --kind reference \
+  --title "Paper Title" \
   --data '{"url":"https://...","title":"Paper Title","authors":["Author"],"year":2026}' \
   --json
 ```
@@ -234,21 +271,27 @@ notlabel inquiry research annotations list-inquiry <inquiry-id> --json
 notlabel inquiry research annotations add <inquiry-id> <block-id> --body "…" --json
 # Reply (parent must be an annotation on the same block):
 notlabel inquiry research annotations add <inquiry-id> <block-id> --body "…" --parent <annotation-id> --json
+# Edit text in place (author or owner/maintainer):
+notlabel inquiry research annotations update <inquiry-id> <block-id> <annotation-id> --body "…" --json
 notlabel inquiry research annotations delete <inquiry-id> <block-id> <annotation-id> --json
 notlabel inquiry research annotations set-hidden <inquiry-id> <block-id> <annotation-id> --hidden true|false --json
 ```
 
 ### Step 6: Inquiry highlight / summary (optional)
 
-Publish a structured preview (`title`, `abstract`, `key_findings`, …) and an optional long **markdown** report (`body_md`). **PUT is owner-only**; collaborators can **GET**.
+**Naming:** What you edit here is the **`InquiryHighlight`** resource (Mongo **`inquiryhighlights`**). The UI may say “preview,” but **preview** in the API is **not** a distinct document type—it is this highlight (generated or updated by flows such as **preview-highlight-activate**, then stored on **`InquiryHighlight`**). **`inquiry highlight set`** writes the same shape (`title`, `abstract`, `key_findings`, …) plus optional long markdown (`body_md`). **PUT / owner writes are owner-only**; collaborators can **GET**.
+
+**Revisions:** Saving a new version also appends a snapshot to **`inquiryhighlightrevisions`**; `inquiry highlight versions …` reads that history (list/show/revert).
 
 ```bash
 notlabel inquiry highlight get <inquiry-id> --json
 # Inline or --file JSON; see `notlabel inquiry highlight set --help`
 notlabel inquiry highlight set <inquiry-id> --title "…" --abstract "…" --key-findings '["…","…"]' --json
-# AI-generated highlight + optional activation side effects—see --help
+# body_md only: pass `--body-md` or `--body-md-file` alone — CLI loads the current highlight, replaces body_md, and PUTs (highlight must already exist)
+notlabel inquiry highlight set <inquiry-id> --body-md-file ./report.md --json
+# AI-generated highlight + optional activation side effects—see --help (persists InquiryHighlight)
 notlabel inquiry highlight preview-activate <inquiry-id> [--evidence-block-ids id1,id2] --json
-# Revision history (owner revert):
+# Revision history (owner revert) — snapshots in inquiryhighlightrevisions
 notlabel inquiry highlight versions list <inquiry-id> --json
 notlabel inquiry highlight versions show <inquiry-id> <version> --json
 notlabel inquiry highlight versions revert <inquiry-id> <version> --json
@@ -301,7 +344,7 @@ notlabel notifications read-by-source <source> --json
 notlabel inquiry activate <id> --json
 ```
 
-Returns `{ inquiry, orbit_graph_id? }`. Activation can trigger orbit graph generation from current `seed_topics`. Blocks can be added before and after activation.
+Returns a **flat** JSON object on activate: `id`, `status`, `activated_at`, `orbit_graph_id`, `created_at` (not a nested `inquiry` wrapper—use `notlabel inquiry activate <id> --json`). Activation can trigger orbit graph generation from current `seed_topics`. Blocks can be added before and after activation. There is **no** `notlabel` subcommand to poll `GET /inquiries/:id/orbit-graph`; use the API or `inquiry get` until `orbit_graph_id` appears on the inquiry if needed.
 
 ## Typical Agent Loop
 
@@ -314,19 +357,21 @@ Returns `{ inquiry, orbit_graph_id? }`. Activation can trigger orbit graph gener
 
 ## Key Rules
 
+- **Respect `my_role`:** Full block/canvas mutation only when you are **owner**, **editor**, or **maintainer** on that inquiry; **viewer** / read-only contexts → **annotations only**, unless the user explicitly upgrades access (invite, role change, or **fork** / new inquiry). See **Collaboration boundaries** above.
 - Always use `--json` for machine-readable output.
-- `raw_input` is **immutable** after inquiry creation; use `--refined-statement` to iterate.
+- `raw_input` is **immutable** after inquiry creation; use **`inquiry update --refined-statement`** to iterate the research question. The CLI surfaces this right after **`inquiry create`** (human-readable note or stderr with `--json`).
 - `seed_topics` is a comma-separated list on `inquiry update`.
+- **Inquiry visibility:** `inquiry create` / `inquiry update` accept `--privacy private|public` (omit on create to use the backend default).
 - **Privacy:** set `--privacy` on blocks deliberately when publishing; defaults usually follow the inquiry.
 - The CLI does **not** expose orbit graph **mutation** endpoints (`/orbit-graphs/...`); those are backend/frontend only.
 - Do **not** assume CLI commands that are not in this document exist (e.g. `lab`, `mcp`, `repo` upload)—verify with `notlabel help` and this repo’s `docs/CLI_COMMANDS.md`.
-- Run `notlabel help` for the command overview; `notlabel protocol` for the canvas protocol text; `notlabel skill` prints this document.
+- Run `notlabel help` for the command overview; `notlabel protocol` for the canvas protocol text. Full agent onboarding is **this document** at `https://notlabel.org/agent.md` (the `notlabel skill` CLI command may mirror or link here).
 
 ## Discovery Commands (short)
 
 | Command | Purpose |
 |---------|---------|
-| `notlabel skill` | Print this SKILL.md (agent onboarding, same as Cursor skill body). |
+| Agent onboarding | **This document:** `https://notlabel.org/agent.md` (canonical). `notlabel skill` in the CLI may print or link to the same content. |
 | `notlabel protocol` | Print the research canvas protocol (block conventions, delta loop). |
 | `notlabel start` | Minimal quick-start sequence for the lab. |
 | `notlabel help` | Command overview. |

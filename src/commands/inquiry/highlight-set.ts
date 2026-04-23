@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
 
-import { http } from "../../core/http.js";
+import { http, HttpError } from "../../core/http.js";
 import { handleApiError, printJson } from "./common.js";
-import type { InquiryHighlight, UpsertInquiryHighlightBody } from "./types.js";
+import type {
+  InquiryHighlight,
+  UpsertInquiryHighlightBody,
+} from "./types.js";
 
 export interface SetHighlightOptions {
   inquiryId: string;
@@ -178,6 +181,48 @@ function stripIgnoredVersion(raw: Record<string, unknown>): UpsertInquiryHighlig
   return body;
 }
 
+function readBodyMdFromOpts(opts: SetHighlightOptions): string {
+  if (opts.bodyMdFile) {
+    try {
+      return readFileSync(opts.bodyMdFile, "utf8");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`\x1b[31mError reading --body-md-file: ${msg}\x1b[0m`);
+      process.exit(1);
+    }
+  }
+  return opts.bodyMd ?? "";
+}
+
+async function buildBodyMdOnlyMerge(
+  inquiryId: string,
+  newBodyMd: string,
+): Promise<UpsertInquiryHighlightBody> {
+  let current: InquiryHighlight;
+  try {
+    current = await http.get<InquiryHighlight>(
+      `/inquiries/${inquiryId}/highlight`,
+    );
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 404) {
+      console.error(
+        "\x1b[31mError: no highlight exists for this inquiry yet. Create one first with --title, --abstract, and --key-findings (or --file), then you can update only body_md with --body-md / --body-md-file.\x1b[0m",
+      );
+      process.exit(1);
+    }
+    handleApiError(err);
+  }
+  return {
+    title: current.title,
+    abstract: current.abstract,
+    key_findings: [...current.key_findings],
+    open_questions: [...(current.open_questions ?? [])],
+    next_steps: [...(current.next_steps ?? [])],
+    evidence_block_ids: [...(current.evidence_block_ids ?? [])],
+    body_md: newBodyMd,
+  };
+}
+
 export async function setHighlightCommand(opts: SetHighlightOptions): Promise<void> {
   let body: UpsertInquiryHighlightBody;
 
@@ -196,43 +241,47 @@ export async function setHighlightCommand(opts: SetHighlightOptions): Promise<vo
     }
     body = stripIgnoredVersion(raw as Record<string, unknown>);
   } else {
-    if (
+    const hasMdOnly =
+      (opts.bodyMd !== undefined || opts.bodyMdFile !== undefined) &&
+      opts.title === undefined &&
+      opts.abstract === undefined &&
+      opts.keyFindingsJson === undefined &&
+      opts.openQuestionsJson === undefined &&
+      opts.nextStepsJson === undefined &&
+      (opts.evidenceBlockIds === undefined || opts.evidenceBlockIds.length === 0);
+
+    if (hasMdOnly) {
+      body = await buildBodyMdOnlyMerge(opts.inquiryId, readBodyMdFromOpts(opts));
+    } else if (
       opts.title === undefined ||
       opts.abstract === undefined ||
       opts.keyFindingsJson === undefined
     ) {
       console.error(
-        "\x1b[31mError: provide --file <path> or --title, --abstract, and --key-findings <json>.\x1b[0m",
+        "\x1b[31mError: provide --file <path> or --title, --abstract, and --key-findings <json>. To change only body_md, pass --body-md or --body-md-file alone (reuses the current highlight from the server; highlight must already exist).\x1b[0m",
       );
       process.exit(1);
-    }
-    body = {
-      title: opts.title,
-      abstract: opts.abstract,
-      key_findings: parseStringArrayJson(opts.keyFindingsJson, "key_findings"),
-    };
-    if (opts.openQuestionsJson !== undefined) {
-      body.open_questions = parseStringArrayJson(
-        opts.openQuestionsJson,
-        "open_questions",
-      );
-    }
-    if (opts.nextStepsJson !== undefined) {
-      body.next_steps = parseStringArrayJson(opts.nextStepsJson, "next_steps");
-    }
-    if (opts.evidenceBlockIds?.length) {
-      body.evidence_block_ids = opts.evidenceBlockIds;
-    }
-    if (opts.bodyMdFile) {
-      try {
-        body.body_md = readFileSync(opts.bodyMdFile, "utf8");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`\x1b[31mError reading --body-md-file: ${msg}\x1b[0m`);
-        process.exit(1);
+    } else {
+      body = {
+        title: opts.title,
+        abstract: opts.abstract,
+        key_findings: parseStringArrayJson(opts.keyFindingsJson, "key_findings"),
+      };
+      if (opts.openQuestionsJson !== undefined) {
+        body.open_questions = parseStringArrayJson(
+          opts.openQuestionsJson,
+          "open_questions",
+        );
       }
-    } else if (opts.bodyMd !== undefined) {
-      body.body_md = opts.bodyMd;
+      if (opts.nextStepsJson !== undefined) {
+        body.next_steps = parseStringArrayJson(opts.nextStepsJson, "next_steps");
+      }
+      if (opts.evidenceBlockIds?.length) {
+        body.evidence_block_ids = opts.evidenceBlockIds;
+      }
+      if (opts.bodyMdFile !== undefined || opts.bodyMd !== undefined) {
+        body.body_md = readBodyMdFromOpts(opts);
+      }
     }
   }
 

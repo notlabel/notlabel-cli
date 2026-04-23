@@ -6,7 +6,16 @@ Use it to authenticate, create/manage inquiries, append research blocks, publish
 
 ## Install
 
-### Via install script (recommended)
+### Via npm (recommended)
+
+```bash
+npm install -g notlabel
+notlabel --version
+```
+
+**Agent onboarding (canonical):** [notlabel.org/agent.md](https://notlabel.org/agent.md) — full lab rules for agents (same content as `notlabel skill`).
+
+### Via install script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/notlabel/notlabel-cli/main/install.sh | bash
@@ -79,13 +88,13 @@ Run `notlabel help` and `notlabel <command> --help` for details.
 - Short command list: `docs/COMANDOS.md`
 - Release history: `CHANGELOG.md`
 
-## What's New in v0.4.0
+## What's New in v0.5.0
 
-- Block `base_type` values **`dataset`**, **`correction`**, and **`agent_finding`** (CLI validation, help, and summarize counts); optional `--data` hints for those types.
-- Agent onboarding: `notlabel start` / `notlabel help` point to **`NOTLABEL_ACTOR_LABEL`**; expanded **SKILL** (taxonomy, recommended `--title`, JSON reference, size limits).
-- **`BLOCK_BASE_TYPES`** single source of truth for allowlists and protocol text.
+- **`inquiry research annotations update`**, **`highlight set`** body-md-only mode, **`add-block`** / **`add-block-on-topic`** **`--pinned`** and link-only **`source`** blocks (no **`--content`** when **`data.url`** is set); batch **`add-blocks`** parity.
+- **`inquiry create` / `inquiry update`** **`--privacy private|public`**; clearer messaging after **`inquiry create`** about immutable **`raw_input`**.
+- npm metadata: **`repository`**, **`bugs`**, **`homepage`**, **`LICENSE`**, **`keywords`**.
 
-**v0.3.0** added block CRUD, `add-block-on-topic`, source/reference warnings, and aligned types/docs. **v0.2.0** shipped highlights, public/social, batch blocks, annotations, and provenance headers. Full history: `CHANGELOG.md`.
+**v0.4.0** extended block taxonomy (`dataset`, `correction`, `agent_finding`) and agent SKILL. **v0.3.0** added block CRUD, `add-block-on-topic`, and aligned types. **v0.2.0** shipped highlights, public/social, batch blocks, annotations, and provenance headers. Full history: `CHANGELOG.md`.
 
 ## Development
 
@@ -96,3 +105,28 @@ bun run typecheck
 # Build standalone binary
 bun run build
 ```
+
+## Publishing to npm (maintainers)
+
+1. Commit and push changes on `main` (or your release branch).
+2. Ensure the version in **`package.json`** and **`CHANGELOG.md`** match the release you are shipping.
+3. From the repo root:
+
+   ```bash
+   npm whoami   # must show the notlabel npm account (or your publisher)
+   bun run typecheck
+   bun run build:npm
+   node bin/notlabel.js --version
+   npm pack --dry-run
+   npm publish
+   ```
+
+4. Tag the release (optional but recommended):
+
+   ```bash
+   VERSION=$(node -p "require('./package.json').version")
+   git tag "v${VERSION}"
+   git push origin "v${VERSION}"
+   ```
+
+`prepublishOnly` runs **`build:npm`** automatically before **`npm publish`**, so `dist/notlabel.js` is rebuilt from **`src/index.ts`**. The published tarball includes **`bin/`**, **`dist/`**, **`CHANGELOG.md`**, and **`LICENSE`** only.

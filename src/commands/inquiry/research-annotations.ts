@@ -4,6 +4,7 @@ import type {
   BlockAnnotation,
   CreateBlockAnnotationBody,
   ListBlockAnnotationsResponse,
+  UpdateBlockAnnotationBody,
 } from "./types.js";
 
 export async function listBlockAnnotationsForBlockCommand(opts: {
@@ -60,6 +61,45 @@ export async function listBlockAnnotationsForInquiryCommand(opts: {
     return;
   }
   items.forEach((a, i) => printAnnotationLine(a, i));
+  console.log();
+}
+
+export async function updateBlockAnnotationCommand(opts: {
+  inquiryId: string;
+  blockId: string;
+  annotationId: string;
+  body: string;
+  json?: boolean;
+}): Promise<void> {
+  const text = opts.body?.trim();
+  if (!text) {
+    console.error("\x1b[31mError: --body is required and must be non-empty.\x1b[0m");
+    process.exit(1);
+  }
+
+  const payload: UpdateBlockAnnotationBody = { body: text };
+
+  let ann: BlockAnnotation;
+  try {
+    ann = await http.patch<BlockAnnotation>(
+      `/inquiries/${opts.inquiryId}/blocks/${opts.blockId}/annotations/${opts.annotationId}`,
+      payload,
+    );
+  } catch (err) {
+    handleApiError(err);
+  }
+
+  if (opts.json) {
+    printJson(ann);
+    return;
+  }
+
+  console.log("\x1b[32mAnnotation updated.\x1b[0m");
+  console.log(`id:         ${ann.id}`);
+  console.log(`block_id:   ${ann.block_id}`);
+  const preview =
+    ann.body.length > 160 ? `${ann.body.slice(0, 160)}…` : ann.body;
+  console.log(`body:       ${preview}`);
   console.log();
 }
 

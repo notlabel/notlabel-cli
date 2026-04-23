@@ -1,14 +1,42 @@
 {
-  "name": "notlabel-cli",
-  "version": "0.4.0",
+  "name": "notlabel",
+  "version": "0.5.0",
   "description": "Official CLI for notlabel.org",
   "type": "module",
-  "bin": {
-    "notlabel": "./src/index.ts"
+  "bin": "bin/notlabel.js",
+  "files": [
+    "bin/",
+    "dist/",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/notlabel/notlabel-cli.git"
+  },
+  "homepage": "https://github.com/notlabel/notlabel-cli#readme",
+  "bugs": {
+    "url": "https://github.com/notlabel/notlabel-cli/issues"
+  },
+  "keywords": [
+    "notlabel",
+    "cli",
+    "research",
+    "inquiry",
+    "orbit"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --compile --outfile notlabel",
+    "build:npm": "mkdir -p dist && bun build ./src/index.ts --outfile=./dist/notlabel.js --target=node --minify",
+    "prepublishOnly": "bun run build:npm",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

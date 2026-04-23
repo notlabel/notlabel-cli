@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0] - 2026-04-22
+
+### Added
+
+- **`notlabel inquiry research annotations update`** — edit annotation body in place (`PATCH`); requires a **notlabel-services** build that exposes this route.
+- **`notlabel inquiry research add-block`** / **`add-block-on-topic`**: **`--pinned true|false`** to pin on create; **`--content`** optional for **`--base-type source`** when **`--data`** includes a non-empty **`url`** (link-only references). Batch **`add-blocks`** accepts the same shape (optional `content`, optional **`is_pinned`**).
+- **`notlabel inquiry highlight set`**: **`--body-md`** / **`--body-md-file` alone** — loads the current highlight, replaces **`body_md`**, and **`PUT`**s (highlight must already exist).
+- **`notlabel inquiry create`**: **`--privacy private|public`**; **`notlabel inquiry update`**: **`--privacy`** (counts as an update when it is the only flag).
+- After **`inquiry create`**, a **note** that **`raw_input`** is permanent (and **`console.warn`** when **`--json`**).
+
+### Changed
+
+- Agent **`skill`** content aligned with the canonical **`agent.md`** (notlabel.org); **`package.json`** now includes **`repository`**, **`bugs`**, **`homepage`**, **`keywords`**, and **`LICENSE`** for npm metadata.
+
+### Fixed
+
+- **`inquiry highlight set`** error messaging when only markdown flags are used; standalone **`--body-md-file`** now works as documented.
+
+### Notes
+
+- **`annotations update`**, **`is_pinned`** on **`POST …/blocks`**, and optional inquiry **`status`** on **`POST /inquiries`** require the corresponding **notlabel-services** deployment (DTO/controller updates).
+
 ## [0.4.0] - 2026-04-01
 
 ### Added

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { http, HttpError } from "../../core/http.js";
+import { resolveCreateBlockContent } from "./block-content-for-create.js";
 import { warnBlockDataConventions } from "./block-data-hints.js";
 import type { Block, BlockBaseType, CreateBlockBody } from "./types.js";
 import { printJson } from "./common.js";
@@ -12,6 +13,7 @@ interface BlockInput {
   data?: Record<string, unknown>;
   linked_block_ids?: string[];
   privacy?: "private" | "public";
+  is_pinned?: boolean;
 }
 
 export interface AddResearchBlocksOptions {
@@ -50,12 +52,13 @@ export async function addResearchBlocksCommand(
   const results: Array<{ index: number; ok: boolean; error?: string }> = [];
 
   for (const [index, item] of items.entries()) {
-    const content = item.content?.trim();
-    if (!content) {
+    const base_type = item.base_type ?? "note";
+    const resolved = resolveCreateBlockContent(base_type, item.data, item.content);
+    if ("error" in resolved) {
       results.push({
         index,
         ok: false,
-        error: "--content is required and must be non-empty",
+        error: resolved.error,
       });
       if (opts.onError === "stop") break;
       continue;
@@ -72,12 +75,11 @@ export async function addResearchBlocksCommand(
       continue;
     }
 
-    const base_type = item.base_type ?? "note";
     warnBlockDataConventions(base_type as BlockBaseType, kind, item.data);
     const body: CreateBlockBody = {
       kind,
       base_type,
-      content,
+      ...(resolved.content !== undefined ? { content: resolved.content } : {}),
       ...(item.title !== undefined && item.title.trim() !== ""
         ? { title: item.title.trim() }
         : {}),
@@ -86,6 +88,7 @@ export async function addResearchBlocksCommand(
         ? { linked_block_ids: item.linked_block_ids }
         : {}),
       ...(item.privacy ? { privacy: item.privacy } : {}),
+      ...(item.is_pinned === true ? { is_pinned: true } : {}),
     };
 
     try {

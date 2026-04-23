@@ -123,7 +123,7 @@ The **Inquiry** is the central topic of an Orbit. Many backends now default new 
 Create a new inquiry. `raw_input` is immutable after creation.
 
 ```bash
-notlabel inquiry create --raw-input "<user text>" [--type hypothesis|exploration|question] [--status drafting|active|archived] [--preferred-language <code>] [--json]
+notlabel inquiry create --raw-input "<user text>" [--type hypothesis|exploration|question] [--status drafting|active|archived] [--privacy private|public] [--preferred-language <code>] [--json]
 ```
 
 | Option | Required | Description |
@@ -131,6 +131,7 @@ notlabel inquiry create --raw-input "<user text>" [--type hypothesis|exploration
 | `--raw-input <text>` | Yes | User's raw input (idea, question, hypothesis). |
 | `--type <type>` | No | `hypothesis`, `exploration`, or `question`. Default: `exploration`. |
 | `--status <status>` | No | Optional initial status (`drafting`, `active`, `archived`). Backend may also set a default when omitted. |
+| `--privacy <privacy>` | No | `private` or `public`. Omitted: backend default (typically private). |
 | `--preferred-language <code>` | No | BCP-47 locale (e.g. `en`, `es`). **Default:** `en` (sent on every create). |
 | `--json` | No | Output only the created inquiry as JSON (for agents). |
 
@@ -168,7 +169,7 @@ notlabel inquiry get abc123 --json
 Update inquiry fields. **Does not allow changing `raw_input`.** Used by the Inquiry Agent to set refined statement and seed topics.
 
 ```bash
-notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [--seed-topics <a,b,c>] [--type <type>] [--preferred-language <code>] [--json]
+notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [--seed-topics <a,b,c>] [--type <type>] [--privacy private|public] [--preferred-language <code>] [--json]
 ```
 
 | Option | Description |
@@ -177,10 +178,11 @@ notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [
 | `--confidence <number>` | Confidence score 0–1. |
 | `--seed-topics <items>` | Comma-separated list of seed topic labels (e.g. `topic1,topic2,topic3`). If the inquiry already has a **ready** orbit graph, the backend automatically adds new topics as nodes and edges in the graph. |
 | `--type <type>` | `hypothesis`, `exploration`, or `question`. |
+| `--privacy <privacy>` | `private` or `public`. |
 | `--preferred-language <code>` | BCP-47 locale (e.g. `en`, `es`). |
 | `--json` | Output updated inquiry as JSON. |
 
-At least one of the above options must be provided.
+At least one of the above options must be provided (including `--privacy` alone if that is the only change).
 
 **Example (agent):**
 ```bash
@@ -249,6 +251,9 @@ notlabel inquiry highlight set <id> \
   [--evidence-block-ids id1,id2] [--body-md "<markdown>"] [--body-md-file ./report.md] \
   [--json]
 
+# Update only body_md (CLI GETs current highlight, merges, then PUTs; highlight must exist)
+notlabel inquiry highlight set <id> --body-md-file ./report.md [--json]
+
 # Or full body from JSON file (same fields as PUT body; server ignores client version)
 notlabel inquiry highlight set <id> --file ./highlight.json [--json]
 
@@ -279,30 +284,32 @@ Create a block on an inquiry.
 
 ```bash
 notlabel inquiry research add-block <id> \
-  --content "<text>" \
+  [--content "<text>"] \
   [--base-type note|experiment|source|code|insight|dataset|correction|agent_finding|custom] \
   [--kind <label>] \
   [--title "<text>"] \
   [--data '{"key":"value",...}'] \
   [--linked-blocks id1,id2] \
   [--privacy private|public] \
+  [--pinned true|false] \
   [--json]
 ```
 
 | Argument/Option | Required | Description |
 |----------------|----------|-------------|
 | `<id>` | Yes | Inquiry id. |
-| `--content <text>` | Yes | Block body text. |
+| `--content <text>` | Usually | Block body text. **Omit** for `base_type` **source** when `--data` includes a non-empty string **`url`** (link-only reference). |
 | `--base-type` | No | Taxonomy (default: `note`). |
 | `--kind <label>` | No | Free-form label (default: `note`). |
 | `--title <text>` | No | Short title. |
 | `--data <json>` | No | Structured metadata as JSON. **Source / `kind` reference:** `{"url":"https://...","title":"...","authors":["A"],"year":2024}`. **Goal note:** `{"priority":"high"|"medium"|"low"}`. Run `notlabel inquiry research add-block --help` for more examples. |
 | `--linked-blocks` | No | Comma-separated ids of other blocks in the **same inquiry** (knowledge-graph links). Example: `id1,id2`. |
 | `--privacy` | No | `private` or `public`. |
+| `--pinned` | No | `true` or `false` — pin on create (default: `false`). |
 | `--json` | No | Output the created **block** as JSON. |
 
 **Notes:**
-- **Agents:** prefer **`--title`** on every new block so list views and previews stay readable; pair with **`--content`** and type-appropriate **`--data`** (see `notlabel skill` → *Recommended fields when creating blocks*).
+- **Agents:** prefer **`--title`** on every new block so list views and previews stay readable; pair with **`--content`** (when needed) and type-appropriate **`--data`** (see `notlabel skill` → *Recommended fields when creating blocks*).
 - List blocks with `inquiry research list-blocks` (JSON field is **`items`**, not `blocks`). Fetch one block: `inquiry research get-block <blockId>`.
 - For `base_type` **source** and `kind` **reference**, the CLI prints a **warning** if `--data` is missing a `url` (optional hygiene; the server may still accept the block).
 - The backend stores blocks in a dedicated collection; they are not embedded on `GET /inquiries/:id`.
@@ -315,13 +322,14 @@ Create a block under a **Topic** (`POST /topics/:topicId/blocks`). Useful for pr
 
 ```bash
 notlabel inquiry research add-block-on-topic <topicId> \
-  --content "<text>" \
+  [--content "<text>"] \
   [--base-type note|experiment|source|code|insight|dataset|correction|agent_finding|custom] \
   [--kind <label>] \
   [--title "<text>"] \
   [--data '<json>'] \
   [--linked-blocks id1,id2] \
   [--privacy private|public] \
+  [--pinned true|false] \
   [--json]
 ```
 
@@ -386,7 +394,7 @@ notlabel inquiry research add-blocks <id> --file ./blocks.json [--on-error conti
 ```
 
 `blocks.json` must be an array of objects using the same payload fields as `add-block`
-(`content`, `base_type`, `kind`, `title`, `data`, `linked_block_ids`, `privacy`).
+(`content`, `base_type`, `kind`, `title`, `data`, `linked_block_ids`, `privacy`, optional `is_pinned`).
 
 ### research summary
 
@@ -413,6 +421,10 @@ notlabel inquiry research annotations list-inquiry <inquiryId> [--json]
 notlabel inquiry research annotations add <inquiryId> <blockId> \
   --body "<text>" [--parent <annotationId>] [--json]
 
+# Edit text in place (author, or owner/maintainer)
+notlabel inquiry research annotations update <inquiryId> <blockId> <annotationId> \
+  --body "<text>" [--json]
+
 # Soft-delete (author, or owner/maintainer)
 notlabel inquiry research annotations delete <inquiryId> <blockId> <annotationId> [--json]
 
@@ -424,6 +436,7 @@ notlabel inquiry research annotations set-hidden <inquiryId> <blockId> <annotati
 | Backend rule | Detail |
 |--------------|--------|
 | Create body | `{ body: string (1–8000), parent_annotation_id?: string }` — parent must be on the **same block**. |
+| Update body | `PATCH …/annotations/:annotationId` with `{ body: string (1–8000) }` — author or owner/maintainer. |
 | Hidden | Non–owner/maintainer lists omit `hidden: true` unless the row is their own; owners/maintainers see all. |
 
 ---
@@ -480,9 +493,9 @@ Use these as self-contained text guides for how to:
 
 | CLI command | HTTP |
 |-------------|------|
-| `inquiry create` | `POST /inquiries` — body: `{ raw_input, type?, status?, preferred_language? }` (CLI sends `preferred_language: "en"` by default). |
+| `inquiry create` | `POST /inquiries` — body: `{ raw_input, type?, status?, privacy?, preferred_language?, seed_topics? }` (CLI sends `preferred_language: "en"` by default). |
 | `inquiry get` | `GET /inquiries/:id`. |
-| `inquiry update` | `PATCH /inquiries/:id` — body: `{ refined_statement?, confidence?, seed_topics?, type?, preferred_language? }` (no `raw_input`). |
+| `inquiry update` | `PATCH /inquiries/:id` — body: `{ refined_statement?, confidence?, seed_topics?, type?, privacy?, preferred_language? }` (no `raw_input`). |
 | `inquiry activate` | `POST /inquiries/:id/activate` — returns `{ id, status, activated_at?, orbit_graph_id?, created_at }`. |
 | `inquiry list` | `GET /inquiries` — query: `?status=drafting|active|archived`. |
 | `inquiry highlight get` | `GET /inquiries/:id/highlight`. |
@@ -491,7 +504,7 @@ Use these as self-contained text guides for how to:
 | `inquiry highlight versions list` | `GET /inquiries/:id/highlight/versions`. |
 | `inquiry highlight versions show` | `GET /inquiries/:id/highlight/versions/:version`. |
 | `inquiry highlight versions revert` | `POST /inquiries/:id/highlight/revert/:version`. |
-| `inquiry research add-block` | `POST /inquiries/:id/blocks` — body: `{ kind, base_type, content?, title?, data?, linked_block_ids?, privacy? }`; returns **Block**. |
+| `inquiry research add-block` | `POST /inquiries/:id/blocks` — body: `{ kind, base_type, content?, title?, data?, linked_block_ids?, privacy?, is_pinned? }`; returns **Block**. |
 | `inquiry research add-block-on-topic` | `POST /topics/:topicId/blocks` — same body shape; block is topic-scoped until promoted. |
 | `inquiry research get-block` | `GET /blocks/:blockId`. |
 | `inquiry research update-block` | `PATCH /blocks/:blockId` — partial body. |
@@ -500,6 +513,7 @@ Use these as self-contained text guides for how to:
 | `inquiry research annotations list-block` | `GET /inquiries/:inquiryId/blocks/:blockId/annotations` — returns `{ items: Annotation[] }`. |
 | `inquiry research annotations list-inquiry` | `GET /inquiries/:inquiryId/annotations` — returns `{ items: Annotation[] }`. |
 | `inquiry research annotations add` | `POST /inquiries/:inquiryId/blocks/:blockId/annotations` — body: `{ body, parent_annotation_id? }`. |
+| `inquiry research annotations update` | `PATCH /inquiries/:inquiryId/blocks/:blockId/annotations/:annotationId` — body: `{ body }`. |
 | `inquiry research annotations delete` | `DELETE …/annotations/:annotationId` — soft-delete; returns `{ id, deleted }`. |
 | `inquiry research annotations set-hidden` | `PATCH …/annotations/:annotationId/hidden` — body: `{ hidden: boolean }`. |
 | `social inquiries stats` | `GET /social/inquiries/:id/stats` — includes populated `tags` (`slug`, `label`). |

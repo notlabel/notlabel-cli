@@ -147,6 +147,12 @@ export interface CreateBlockBody {
   data?: Record<string, unknown>;
   linked_block_ids?: string[];
   privacy?: InquiryPrivacy;
+  is_pinned?: boolean;
+}
+
+/** PATCH annotation body (same length rules as create). */
+export interface UpdateBlockAnnotationBody {
+  body: string;
 }
 
 /** PATCH /blocks/:id — send only fields to change. */

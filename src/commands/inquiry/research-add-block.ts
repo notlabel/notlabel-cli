@@ -1,4 +1,5 @@
 import { http } from "../../core/http.js";
+import { resolveCreateBlockContent } from "./block-content-for-create.js";
 import { warnBlockDataConventions } from "./block-data-hints.js";
 import { handleApiError, printJson } from "./common.js";
 import { validateLinkedBlockIdsInInquiry } from "./research-block-helpers.js";
@@ -11,24 +12,27 @@ import type {
 
 export interface AddResearchBlockOptions {
   id: string;
-  content: string;
+  content?: string;
   kind?: string;
   baseType?: BlockBaseType;
   title?: string;
   data?: Record<string, unknown>;
   linkedBlockIds?: string[];
   privacy?: InquiryPrivacy;
+  isPinned?: boolean;
   json?: boolean;
 }
 
 export async function addResearchBlockCommand(
   opts: AddResearchBlockOptions,
 ): Promise<void> {
-  const content = opts.content?.trim();
-  if (!content) {
-    console.error(
-      "\x1b[31mError: --content is required and must be non-empty.\x1b[0m",
-    );
+  const resolved = resolveCreateBlockContent(
+    opts.baseType ?? "note",
+    opts.data,
+    opts.content,
+  );
+  if ("error" in resolved) {
+    console.error(`\x1b[31m${resolved.error}\x1b[0m`);
     process.exit(1);
   }
 
@@ -44,13 +48,14 @@ export async function addResearchBlockCommand(
   const body: CreateBlockBody = {
     kind,
     base_type,
-    content,
+    ...(resolved.content !== undefined ? { content: resolved.content } : {}),
     ...(opts.title !== undefined && opts.title.trim() !== ""
       ? { title: opts.title.trim() }
       : {}),
     ...(opts.data !== undefined ? { data: opts.data } : {}),
     ...(opts.linkedBlockIds?.length ? { linked_block_ids: opts.linkedBlockIds } : {}),
     ...(opts.privacy ? { privacy: opts.privacy } : {}),
+    ...(opts.isPinned === true ? { is_pinned: true } : {}),
   };
 
   if (opts.linkedBlockIds?.length) {
