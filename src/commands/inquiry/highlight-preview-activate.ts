@@ -31,9 +31,7 @@ export async function previewHighlightActivateCommand(
     return;
   }
 
-  console.log(
-    `Inquiry ${res.inquiry.id} status=${res.inquiry.status} orbit_graph_id=${res.inquiry.orbit_graph_id ?? "—"}`,
-  );
+  console.log(`Inquiry ${res.inquiry.id} status=${res.inquiry.status}`);
   console.log(
     `Highlight v${res.highlight.version}: ${res.highlight.title}`,
   );

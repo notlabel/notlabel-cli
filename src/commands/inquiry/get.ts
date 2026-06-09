@@ -54,9 +54,6 @@ export async function getInquiryCommand(opts: GetInquiryOptions): Promise<void> 
       `collaborators:     ${inquiry.collaborators.length} (use --json for roles)`,
     );
   }
-  if (inquiry.orbit_graph_id) {
-    console.log(`orbit_graph_id:    ${inquiry.orbit_graph_id}`);
-  }
   if (inquiry.created_at) console.log(`created_at:        ${inquiry.created_at}`);
   console.log();
 }

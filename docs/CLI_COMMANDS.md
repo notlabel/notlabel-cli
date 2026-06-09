@@ -114,9 +114,9 @@ Agent usage pattern:
 
 ---
 
-## Inquiry (Orbit central topic)
+## Inquiry (research topic)
 
-The **Inquiry** is the central topic of an Orbit. Many backends now default new inquiries to **active** on create. Use `inquiry get` to confirm the current status in your environment.
+The **Inquiry** is the central research thread in notlabel—the same objects listed in the web app under **My Lab** (`/mylab`). Many backends now default new inquiries to **active** on create. Use `inquiry get` to confirm the current status in your environment.
 
 ### create
 
@@ -176,7 +176,7 @@ notlabel inquiry update <id> [--refined-statement <text>] [--confidence <0-1>] [
 |--------|-------------|
 | `--refined-statement <text>` | Refined statement from the agent. |
 | `--confidence <number>` | Confidence score 0–1. |
-| `--seed-topics <items>` | Comma-separated list of seed topic labels (e.g. `topic1,topic2,topic3`). If the inquiry already has a **ready** orbit graph, the backend automatically adds new topics as nodes and edges in the graph. |
+| `--seed-topics <items>` | Comma-separated list of seed topic labels (e.g. `topic1,topic2,topic3`). |
 | `--type <type>` | `hypothesis`, `exploration`, or `question`. |
 | `--privacy <privacy>` | `private` or `public`. |
 | `--preferred-language <code>` | BCP-47 locale (e.g. `en`, `es`). |
@@ -193,7 +193,7 @@ notlabel inquiry update abc123 --refined-statement "Impact of climate on crop yi
 
 ### activate
 
-Confirm the inquiry and trigger orbit graph generation. Idempotent if the inquiry is already active (returns current state). After activation, the backend creates the orbit graph (nodes/edges); the frontend can poll until status is `ready`.
+Confirm the inquiry (**`drafting` → `active`**). Idempotent if the inquiry is already active (returns current state). Orbit graph generation is **legacy backend behavior**—the product UI does not use graphs; agents should not poll for them.
 
 ```bash
 notlabel inquiry activate <id> [--json]
@@ -202,7 +202,7 @@ notlabel inquiry activate <id> [--json]
 | Argument/Option | Description |
 |----------------|-------------|
 | `<id>` | Inquiry id. |
-| `--json` | Output `{ inquiry, orbit_graph_id? }` as JSON. |
+| `--json` | Output flat activate response as JSON (`id`, `status`, `activated_at?`, `orbit_graph_id?`, `created_at`). |
 
 **Example:**
 ```bash
@@ -257,7 +257,7 @@ notlabel inquiry highlight set <id> --body-md-file ./report.md [--json]
 # Or full body from JSON file (same fields as PUT body; server ignores client version)
 notlabel inquiry highlight set <id> --file ./highlight.json [--json]
 
-# AI-generated highlight + activate inquiry (orbit)
+# AI-generated highlight + activate inquiry
 notlabel inquiry highlight preview-activate <id> [--evidence-block-ids id1,id2] [--json]
 
 # Revision history (list/read/revert)
@@ -314,7 +314,7 @@ notlabel inquiry research add-block <id> \
 - For `base_type` **source** and `kind` **reference**, the CLI prints a **warning** if `--data` is missing a `url` (optional hygiene; the server may still accept the block).
 - The backend stores blocks in a dedicated collection; they are not embedded on `GET /inquiries/:id`.
 
-**Orbit graph (backend):** When you add or update `seed_topics` on an inquiry that already has a **ready** orbit graph, the backend automatically adds the new topics as nodes (orbit 1) and creates edges between them and all existing nodes. The frontend graph updates accordingly. The CLI does not expose graph mutation commands; the front (or direct API) can use the orbit-graph endpoints below for manual edges/nodes.
+**Orbit graph (legacy backend):** The backend may still expose `/orbit-graphs/…` and set `orbit_graph_id` on inquiries in some environments. **The current product does not build or display these graphs** (My Lab lists inquiries). The CLI does not expose graph commands. Documented below for API completeness only.
 
 ### research add-block-on-topic
 
@@ -461,7 +461,7 @@ notlabel inquiry research annotations set-hidden <inquiryId> <blockId> <annotati
 
 5. **Publish highlight (optional, owner):** `notlabel inquiry highlight set <id> --file ./highlight.json --json` or inline flags; or `inquiry highlight preview-activate` for an AI draft + activation.
 
-6. **Activate (on user confirm):** `notlabel inquiry activate <id> --json` → capture `orbit_graph_id`; poll `GET /inquiries/:id/orbit-graph` or `GET /inquiries/:id` until the graph is ready.
+6. **Activate (on user confirm):** `notlabel inquiry activate <id> --json` when a **`drafting` → `active`** transition is explicitly needed. Ignore legacy `orbit_graph_id` in the response—the product uses **My Lab** (`/mylab`), not orbit graphs.
 
 ---
 
@@ -539,7 +539,9 @@ These notes mirror **`notlabel-services`** schemas and serializers so agents par
 
 ### Inquiry (`GET /inquiries/:id` with JWT)
 
-Private **detail** uses `serializeInquiryDetail`. Beyond core fields (`raw_input`, `refined_statement`, `type`, `status`, `confidence`, `privacy`, `preferred_language`, `orbit_graph_id`, `activated_at`, timestamps):
+Private **detail** uses `serializeInquiryDetail`. Beyond core fields (`raw_input`, `refined_statement`, `type`, `status`, `confidence`, `privacy`, `preferred_language`, `activated_at`, timestamps):
+
+Legacy: `orbit_graph_id` may appear but is **not used by the current product UI**—ignore for normal agent workflows.
 
 | Field | Meaning |
 |--------|---------|
@@ -570,9 +572,9 @@ Private **detail** uses `serializeInquiryDetail`. Beyond core fields (`raw_input
 
 ---
 
-### Orbit graph endpoints (backend; not exposed by CLI)
+### Orbit graph endpoints (legacy backend; not exposed by CLI)
 
-The backend maintains an **orbit graph** per inquiry: nodes = topics (with orbit/gravity), edges = links between topics. The CLI does not call these; they are used by the frontend or direct API.
+**Dormant in the product:** My Lab (`/mylab`) lists inquiries; orbit graphs are not part of the current UI model. The backend may still maintain graph documents and the endpoints below for possible future use. The CLI does not call them.
 
 | HTTP | Description |
 |------|-------------|
@@ -585,6 +587,4 @@ The backend maintains an **orbit graph** per inquiry: nodes = topics (with orbit
 | `POST /orbit-graphs/:id/nodes-and-edges` | Add one node and edges from it to existing nodes — body: `{ topic_id? \| label?, orbit, connect_to_node_ids[], gravity?, edge_weight? }`. |
 | `POST /orbit-graphs/:id/generate-orbit-3` | AI-generated “surprise” topics (orbit 3) and edges to orbit-1 nodes; no body. |
 
-**Graph lifecycle:** On **activate**, the backend creates the graph from current `seed_topics` (nodes orbit 1, fully connected edges). On **inquiry update** with new `seed_topics` and an existing ready graph, the backend automatically adds new topic nodes and edges to all current nodes. Edge types include `direct`, `adjacent`, `surprise`.
-
-All request/response formats and business rules are defined in the Orbit backend reference. This CLI only consumes the inquiry API above.
+All request/response formats and business rules are defined in **notlabel-services**. This CLI only consumes the inquiry API above.

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.1] - 2026-06-09
+
+### Changed
+
+- Agent docs and CLI copy aligned with **My Lab** (`/mylab`) as the inquiry hub; **orbit graphs** documented as legacy backend metadata (not part of the current product model).
+- Human-readable output no longer emphasizes `orbit_graph_id` or orbit-graph polling; **`--json`** still returns API fields unchanged.
+- Command descriptions and `notlabel protocol` de-emphasize orbit graph generation on **`inquiry activate`**.
+
 ## [0.5.0] - 2026-04-22
 
 ### Added

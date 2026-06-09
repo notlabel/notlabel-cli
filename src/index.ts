@@ -146,11 +146,11 @@ program
     onboardingResearchCommand();
   });
 
-// ── inquiry (Orbit central topic) ──────────────────────────────────────────────
+// ── inquiry (research topic) ───────────────────────────────────────────────────
 const inquiry = program
   .command("inquiry")
   .description(
-    "Orbit central topic (Inquiry): create, update, activate, list, highlight, research",
+    "Research inquiry: create, update, activate, list, highlight, research",
   );
 
 inquiry
@@ -250,7 +250,7 @@ inquiry
 
 inquiry
   .command("activate <id>")
-  .description("Confirm inquiry and trigger orbit graph generation")
+  .description("Confirm inquiry (drafting → active); optional legacy side effects on backend")
   .option("--json", "Output raw JSON for agents")
   .action(async (id, opts) => {
     await activateInquiryCommand({ id, json: opts.json });
@@ -342,7 +342,7 @@ inquiryHighlight
 inquiryHighlight
   .command("preview-activate <id>")
   .description(
-    "POST AI highlight + activate inquiry (orbit). Optional --evidence-block-ids",
+    "POST AI highlight + activate inquiry. Optional --evidence-block-ids",
   )
   .option(
     "--evidence-block-ids <ids>",
@@ -1218,7 +1218,7 @@ program
       "",
       "Top-level commands:",
       "  auth           Authentication (login, logout, whoami)",
-      "  inquiry        Orbit topic (create, update, activate, list, highlight, research)",
+      "  inquiry        Research inquiry (create, update, activate, list, highlight, research)",
       "  social         Tags, stats, and related inquiries",
       "  public         Discover public inquiries & read-only blocks (JWT)",
       "  notifications  Notification inbox (new research updates, mark read)",
@@ -1245,7 +1245,7 @@ program
       "Notes:",
       "- Inquiry and public discovery commands accept --json for machine-readable output.",
       "- Agents: set NOTLABEL_ACTOR_LABEL in .env for write attribution (details: notlabel skill).",
-      "- Backends and business rules are defined in the Orbit backend reference; this CLI only consumes that API.",
+      "- Backends and business rules are defined in notlabel-services; this CLI only consumes that API.",
     ];
 
     console.log(lines.join("\n"));

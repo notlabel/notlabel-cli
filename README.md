@@ -88,13 +88,12 @@ Run `notlabel help` and `notlabel <command> --help` for details.
 - Short command list: `docs/COMANDOS.md`
 - Release history: `CHANGELOG.md`
 
-## What's New in v0.5.0
+## What's New in v0.5.1
 
-- **`inquiry research annotations update`**, **`highlight set`** body-md-only mode, **`add-block`** / **`add-block-on-topic`** **`--pinned`** and link-only **`source`** blocks (no **`--content`** when **`data.url`** is set); batch **`add-blocks`** parity.
-- **`inquiry create` / `inquiry update`** **`--privacy private|public`**; clearer messaging after **`inquiry create`** about immutable **`raw_input`**.
-- npm metadata: **`repository`**, **`bugs`**, **`homepage`**, **`LICENSE`**, **`keywords`**.
+- Agent **`skill`** / docs: **My Lab** (`/mylab`) replaces orbit as the product mental model; orbit graphs marked legacy (ignore for normal agent workflows).
+- CLI human output: no orbit-graph polling hints; **`inquiry activate`** messaging updated accordingly.
 
-**v0.4.0** extended block taxonomy (`dataset`, `correction`, `agent_finding`) and agent SKILL. **v0.3.0** added block CRUD, `add-block-on-topic`, and aligned types. **v0.2.0** shipped highlights, public/social, batch blocks, annotations, and provenance headers. Full history: `CHANGELOG.md`.
+**v0.5.0** added **`annotations update`**, highlight body-md-only mode, **`--pinned`** / link-only sources, inquiry **`--privacy`**, and npm metadata. **v0.4.0** extended block taxonomy (`dataset`, `correction`, `agent_finding`) and agent SKILL. **v0.3.0** added block CRUD, `add-block-on-topic`, and aligned types. **v0.2.0** shipped highlights, public/social, batch blocks, annotations, and provenance headers. Full history: `CHANGELOG.md`.
 
 ## Development
 

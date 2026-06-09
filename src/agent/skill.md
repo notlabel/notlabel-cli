@@ -42,11 +42,11 @@ If you call the API with `fetch`/curl instead of this CLI, send **`x-notlabel-ac
 
 | Concept | Description |
 |---------|-------------|
-| **Inquiry** | Central research topic. Fields include: `raw_input`, `refined_statement`, `type`, `status`, `confidence` (0–1), `privacy` (`private` \| `public`), `preferred_language` (API defaults to `en`; schema allows at least `en` and `es`), `seed_topics` (string labels), `seed_topic_ids`, `root_topic_id` / `root_topic`, `orbit_graph_id`, `activated_at`, `collaborators` as `{ user_id, role: viewer\|editor\|maintainer }` (owner is the inquiry `user_id`). On **GET /inquiries/:id** with JWT, the API also returns `topics` (de-duplicated: `id`, `label`, `slug`, `description`) and `my_role` (`owner` \| collaborator role). Lifecycle: `drafting` → `active` → `archived`. **New inquiries are often created `active` by default**—always use `notlabel inquiry get <id> --json` to confirm `status` in your environment. |
+| **Inquiry** | Central research topic—the same object listed in the web app under **My Lab** (`/mylab`). Fields include: `raw_input`, `refined_statement`, `type`, `status`, `confidence` (0–1), `privacy` (`private` \| `public`), `preferred_language` (API defaults to `en`; schema allows at least `en` and `es`), `seed_topics` (string labels), `seed_topic_ids`, `root_topic_id` / `root_topic`, `activated_at`, `collaborators` as `{ user_id, role: viewer\|editor\|maintainer }` (owner is the inquiry `user_id`). On **GET /inquiries/:id** with JWT, the API also returns `topics` (de-duplicated: `id`, `label`, `slug`, `description`) and `my_role` (`owner` \| collaborator role). Lifecycle: `drafting` → `active` → `archived`. **New inquiries are often created `active` by default**—always use `notlabel inquiry get <id> --json` to confirm `status` in your environment. Responses may still include legacy `orbit_graph_id` (see below); ignore it for normal research work. |
 | **Block** | Research entry. Scoped by **`inquiry_id`** (primary inquiry canvas) and/or **`topic_id`** (topic-scoped / pre-promotion canvas). Has `base_type`, `kind`, optional `title` / `content`, `data` (mixed JSON), `linked_block_ids`, `privacy`, `is_pinned`. Responses may include **actor provenance** (`actor_kind`: `user_manual` \| `agent`, `actor_label`, `correlation_id`) when the write carried HTTP provenance headers. Collaborator **contributions** may include `contribution_kind`, `contribution_review_status` (`pending` \| `approved` \| `rejected`), review timestamps, and rejection reason. New blocks typically **inherit inquiry privacy** unless you set `--privacy`. |
 | **Block annotation** | Comment on a block: `body`, optional `parent_annotation_id` (must be on the **same block**). Schema stores `hidden` and `deleted_at`; **lists omit** soft-deleted rows. Non-moderators typically do not see others’ `hidden: true` annotations in list results (unless they are the author). List/create payloads include `user` (`id`, `username`, `display_name`) and a small **block** preview object (`id`, `title`, `kind`)—that is **not** the same as **InquiryHighlight** below. |
 | **InquiryHighlight** | Structured inquiry summary the product often calls **highlight** or **preview**: fields such as `inquiry_id`, `user_id`, `title`, `abstract`, `key_findings`, `open_questions`, `next_steps`, `body_md`, `evidence_block_ids`, `version`, etc. In **notlabel-services** this is the Mongoose model **`InquiryHighlight`**; the default Mongo collection name is **`inquiryhighlights`**. There is **no** separate document type whose collection is literally named `preview`—API routes or flows labeled “preview” (e.g. **preview-highlight-activate**) **generate and persist** this highlight document. Each time a new highlight version is saved, a **revision snapshot** is stored in **`inquiryhighlightrevisions`** (history keyed by `version`). CLI surface: `notlabel inquiry highlight …`. |
-| **Orbit Graph** | Optional: generated when an inquiry is **activated** from seed topics (nodes = topics, edges = connections). Not required for everyday block capture. |
+| **Orbit graph (legacy)** | Backend-only artifact (`orbit_graph_id`, `/orbit-graphs/…`). **Not used by the current product UI** (My Lab lists inquiries, not graphs). May still appear on activate in some environments; **do not build workflows around it**. |
 | **Notification** | Delta feed for new research updates. |
 
 **Tip:** Always use `notlabel inquiry get <id> --json` when agents need exact collaborator roles, full `topics` arrays, `seed_topic_ids`, or current **`status`**.
@@ -105,7 +105,7 @@ Use this to know which fields appear in API responses and what matters for parsi
 
 ### Inquiry (authenticated `GET /inquiries/:id`)
 
-Core: `raw_input`, `refined_statement`, `type`, `status`, `confidence`, `privacy`, `preferred_language`, `orbit_graph_id`, `activated_at`, timestamps.
+Core: `raw_input`, `refined_statement`, `type`, `status`, `confidence`, `privacy`, `preferred_language`, `activated_at`, timestamps. Legacy: `orbit_graph_id` (ignore unless you are debugging old backend data).
 
 | Field | Meaning |
 |--------|---------|
@@ -169,8 +169,6 @@ notlabel inquiry update <id> \
 # Or change visibility only:
 notlabel inquiry update <id> --privacy public --json
 ```
-
-If the inquiry already has a **ready** orbit graph, new `seed_topics` are automatically added as nodes with edges to existing nodes.
 
 ### Step 3: Append research blocks
 
@@ -338,13 +336,13 @@ notlabel notifications read-by-source <source> --json
 
 ### Step 10: Activate the Inquiry (optional)
 
-**Not required** for normal research capture: new inquiries are often **`active` already**. Use **`inquiry activate`** only when the product flow or user explicitly needs the transition (e.g. orbit graph generation from `seed_topics`, or a legacy drafting workflow).
+**Not required** for normal research capture: new inquiries are often **`active` already**. Use **`inquiry activate`** only when the product flow or user explicitly needs the **`drafting` → `active`** transition (legacy workflows or highlight preview-activate side effects).
 
 ```bash
 notlabel inquiry activate <id> --json
 ```
 
-Returns a **flat** JSON object on activate: `id`, `status`, `activated_at`, `orbit_graph_id`, `created_at` (not a nested `inquiry` wrapper—use `notlabel inquiry activate <id> --json`). Activation can trigger orbit graph generation from current `seed_topics`. Blocks can be added before and after activation. There is **no** `notlabel` subcommand to poll `GET /inquiries/:id/orbit-graph`; use the API or `inquiry get` until `orbit_graph_id` appears on the inquiry if needed.
+Returns a **flat** JSON object: `id`, `status`, `activated_at`, `orbit_graph_id?`, `created_at` (not a nested `inquiry` wrapper). The response may include **`orbit_graph_id`** (legacy backend field); **do not** poll or wait on orbit graphs—the product uses **My Lab** (`/mylab`) and inquiry lists, not graph UIs. Blocks can be added before and after activation.
 
 ## Typical Agent Loop
 
@@ -363,7 +361,7 @@ Returns a **flat** JSON object on activate: `id`, `status`, `activated_at`, `orb
 - `seed_topics` is a comma-separated list on `inquiry update`.
 - **Inquiry visibility:** `inquiry create` / `inquiry update` accept `--privacy private|public` (omit on create to use the backend default).
 - **Privacy:** set `--privacy` on blocks deliberately when publishing; defaults usually follow the inquiry.
-- The CLI does **not** expose orbit graph **mutation** endpoints (`/orbit-graphs/...`); those are backend/frontend only.
+- **Orbit graphs are dormant:** ignore `orbit_graph_id` and `/orbit-graphs/…` for normal agent work. The CLI does not expose graph commands; My Lab (`/mylab`) is the inquiry hub in the web app.
 - Do **not** assume CLI commands that are not in this document exist (e.g. `lab`, `mcp`, `repo` upload)—verify with `notlabel help` and this repo’s `docs/CLI_COMMANDS.md`.
 - Run `notlabel help` for the command overview; `notlabel protocol` for the canvas protocol text. Full agent onboarding is **this document** at `https://notlabel.org/agent.md` (the `notlabel skill` CLI command may mirror or link here).
 

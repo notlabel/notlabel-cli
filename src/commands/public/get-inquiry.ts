@@ -29,8 +29,6 @@ export async function publicGetInquiryCommand(opts: {
     console.log(`raw_input:          ${row["raw_input"]}`);
   if (row["refined_statement"])
     console.log(`refined_statement:  ${row["refined_statement"]}`);
-  if (row["orbit_graph_id"])
-    console.log(`orbit_graph_id:     ${row["orbit_graph_id"]}`);
   const hl = row["highlight"];
   if (hl && typeof hl === "object") {
     const h = hl as Record<string, unknown>;

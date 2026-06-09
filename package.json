@@ -1,6 +1,6 @@
 {
   "name": "notlabel",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Official CLI for notlabel.org",
   "type": "module",
   "bin": "bin/notlabel.js",
@@ -23,7 +23,7 @@
     "cli",
     "research",
     "inquiry",
-    "orbit"
+    "mylab"
   ],
   "license": "MIT",
   "publishConfig": {
